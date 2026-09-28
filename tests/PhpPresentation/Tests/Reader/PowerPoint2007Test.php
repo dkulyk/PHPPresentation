@@ -2695,4 +2695,43 @@ class PowerPoint2007Test extends TestCase
         }
         self::assertSame([[1, false], [null, false], [null, false], [null, true], [null, false], [null, false], [1, false], [null, false], [null, true]], $read);
     }
+
+    public function testBulletColorSurvivesTheRoundTrip(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        foreach ([null, 'FFFF0000', 'FF00FF00'] as $color) {
+            $oShape = $oPhpPresentation->getActiveSlide()->createRichTextShape();
+            $oBullet = $oShape->getActiveParagraph()->getBulletStyle()->setBulletType(Bullet::TYPE_BULLET);
+            if (null !== $color) {
+                $oBullet->setBulletColor(new Color($color));
+            }
+            $oShape->createTextRun('Item');
+        }
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new PowerPoint2007Writer($oPhpPresentation))->save($file);
+
+        // The third marker takes a colour of the theme, which is not read
+        $oZip = new ZipArchive();
+        $oZip->open($file);
+        $sSlide = $oZip->getFromName('ppt/slides/slide1.xml');
+        self::assertIsString($sSlide);
+        $sSlide = (string) preg_replace('#<a:buClr>(?:(?!</a:buClr>).)*00FF00.*?</a:buClr>#s', '<a:buClr><a:schemeClr val="accent1"/></a:buClr>', $sSlide, 1, $count);
+        self::assertEquals(1, $count);
+        $oZip->deleteName('ppt/slides/slide1.xml');
+        $oZip->addFromString('ppt/slides/slide1.xml', $sSlide);
+        $oZip->close();
+
+        $oPhpPresentationRead = (new PowerPoint2007())->load($file);
+        unlink($file);
+
+        // a marker with no colour takes the one of its text
+        $read = [];
+        foreach ($oPhpPresentationRead->getActiveSlide()->getShapeCollection() as $oShape) {
+            self::assertInstanceOf(RichText::class, $oShape);
+            $oColor = $oShape->getParagraph(0)->getBulletStyle()->getBulletColor();
+            $read[] = null === $oColor ? null : $oColor->getARGB();
+        }
+        self::assertEquals([null, 'FFFF0000', null], $read);
+    }
 }

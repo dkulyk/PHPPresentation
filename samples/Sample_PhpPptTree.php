@@ -222,7 +222,7 @@ class Sample_PhpPptTree
                 $this->append('<dt>Bullet Style</dt><dd> Bullet::' . $this->getConstantName('\PhpOffice\PhpPresentation\Style\Bullet', $oParagraph->getBulletStyle()->getBulletType()) . '</dd>');
                 if (Bullet::TYPE_NONE != $oParagraph->getBulletStyle()->getBulletType()) {
                     $this->append('<dt>Bullet Font</dt><dd>' . $oParagraph->getBulletStyle()->getBulletFont() . '</dd>');
-                    $this->append('<dt>Bullet Color</dt><dd>' . $oParagraph->getBulletStyle()->getBulletColor()->getARGB() . '</dd>');
+                    $this->append('<dt>Bullet Color</dt><dd>' . ($oParagraph->getBulletStyle()->getBulletColor() ? $oParagraph->getBulletStyle()->getBulletColor()->getARGB() : 'text') . '</dd>');
                 }
                 if (Bullet::TYPE_BULLET == $oParagraph->getBulletStyle()->getBulletType()) {
                     $this->append('<dt>Bullet Char</dt><dd>' . $oParagraph->getBulletStyle()->getBulletChar() . '</dd>');

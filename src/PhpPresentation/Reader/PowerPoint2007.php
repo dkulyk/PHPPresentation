@@ -2220,17 +2220,10 @@ class PowerPoint2007 implements ReaderInterface
                 // no start is a start of 1; loadNumericStartAts() drops the ones that only continue a numbering
                 $oParagraph->getBulletStyle()->setBulletNumericStartAt($oElementBuAutoNum->hasAttribute('startAt') ? $oElementBuAutoNum->getAttribute('startAt') : 1);
             }
-            $oElementBuClr = $document->getElement('a:buClr', $oSubElement);
+            // A colour of the theme is not read, and the marker then takes the colour of its text
+            $oElementBuClr = $document->getElement('a:buClr/a:srgbClr', $oSubElement);
             if ($oElementBuClr instanceof DOMElement) {
-                $oColor = new Color();
-                /**
-                 * @todo Create protected for reading Color
-                 */
-                $oElementColor = $document->getElement('a:srgbClr', $oElementBuClr);
-                if ($oElementColor instanceof DOMElement) {
-                    $oColor->setRGB($oElementColor->hasAttribute('val') ? $oElementColor->getAttribute('val') : null);
-                }
-                $oParagraph->getBulletStyle()->setBulletColor($oColor);
+                $oParagraph->getBulletStyle()->setBulletColor($this->loadStyleColor($document, $oElementBuClr));
             }
         }
         $arraySubElements = $document->getElements('(a:r|a:br|a:fld)', $oElement);
