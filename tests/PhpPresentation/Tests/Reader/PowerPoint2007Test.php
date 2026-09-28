@@ -2505,6 +2505,38 @@ class PowerPoint2007Test extends TestCase
         self::assertEquals('Kept', $arrayShape[0]->getPlainText());
     }
 
+    public function testPlaceholderKeepsItsNameAndIdx(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oShape = $oPhpPresentation->getActiveSlide()->createRichTextShape();
+        $oShape->setPlaceHolder((new Placeholder(Placeholder::PH_TYPE_BODY))->setIdx(1))->setName('Slide text');
+        $oShape->createTextRun('Text');
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new PowerPoint2007Writer($oPhpPresentation))->save($file);
+        $oPhpPresentationRead = (new PowerPoint2007())->load($file);
+        unlink($file);
+
+        $oShapeRead = $oPhpPresentationRead->getActiveSlide()->getShapeCollection()[0];
+        self::assertInstanceOf(RichText::class, $oShapeRead);
+        self::assertEquals('Slide text', $oShapeRead->getName());
+        self::assertTrue($oShapeRead->isPlaceholder());
+        self::assertEquals(Placeholder::PH_TYPE_BODY, $oShapeRead->getPlaceholder()->getType());
+        self::assertEquals(1, $oShapeRead->getPlaceholder()->getIdx());
+    }
+
+    public function testPlaceholderWithoutTypeIsAnObject(): void
+    {
+        // PowerPoint writes the content placeholder of a layout as `<p:ph idx="1"/>`
+        $arrayShape = $this->roundTripAutoShape(new AutoShape(), static function (string $xml): string {
+            return str_replace('<p:nvPr/>', '<p:nvPr><p:ph idx="1"/></p:nvPr>', $xml);
+        });
+        self::assertInstanceOf(RichText::class, $arrayShape[0]);
+        self::assertTrue($arrayShape[0]->isPlaceholder());
+        self::assertEquals('obj', $arrayShape[0]->getPlaceholder()->getType());
+        self::assertEquals(1, $arrayShape[0]->getPlaceholder()->getIdx());
+    }
+
     /**
      * Write a slide holding the AutoShape, edit its XML if asked, and read it back.
      *

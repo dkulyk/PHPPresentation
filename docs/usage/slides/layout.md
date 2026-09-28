@@ -53,6 +53,9 @@ use PhpOffice\PhpPresentation\Shape\Placeholder;
 $shape->setPlaceHolder(new Placeholder(Placeholder::PH_TYPE_TITLE));
 ```
 
+A placeholder is written with the name `setName()` gave it, which PowerPoint lists in its
+Selection pane, and with `Placeholder for <type>` when it has none.
+
 In an OpenDocument presentation, a text shape that is a title, a centered title, a subtitle, a
 body, a footer, a date or a slide number is written as a presentation object of that class, which
 is what makes LibreOffice export a title as a heading in a tagged PDF. It keeps its own position,
