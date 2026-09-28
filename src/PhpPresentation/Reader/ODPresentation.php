@@ -336,6 +336,39 @@ class ODPresentation implements ReaderInterface
     ];
 
     /**
+     * The OOXML alphabets each ODF number format can be read as, the one to try first first. The
+     * formats are the ones the ODPresentation Writer writes, which are what LibreOffice writes for
+     * those alphabets; any other format is read as arabic. The key `1` is an integer to PHP.
+     *
+     * @var array<int|string, array<int, string>>
+     */
+    protected const NUMERIC_BULLET_ALPHABET = [
+        '1' => ['arabic', 'arabic1'],
+        'a' => ['alphaLc'],
+        'A' => ['alphaUc'],
+        'i' => ['romanLc'],
+        'I' => ['romanUc'],
+        "\u{2460}, \u{2461}, \u{2462}, ..." => ['circleNumDb'],
+        "\u{58F9}, \u{8D30}, \u{53C1}, ..." => ['ea1Chs'],
+        "\u{58F9}, \u{8CB3}, \u{53C3}, ..." => ['ea1Cht'],
+        "\u{05D0}, \u{05D1}, \u{05D2}, ..." => ['hebrew2'],
+        "\u{0E01}, \u{0E02}, \u{0E04}, ..." => ['thaiAlpha'],
+    ];
+
+    /**
+     * The OOXML separator each ODF prefix and suffix, joined by `|`, are read as.
+     *
+     * @var array<string, string>
+     */
+    protected const NUMERIC_BULLET_SEPARATOR = [
+        '|.' => 'Period',
+        '(|)' => 'ParenBoth',
+        '|)' => 'ParenR',
+        '|-' => 'Minus',
+        '|' => 'Plain',
+    ];
+
+    /**
      * @var array<string, array{alignment: null|Alignment, background: null|BackgroundColor|Image, columns: null|int, columnSpacing: null|int, columnsRTL: null|bool, fill: null|Fill, font: null|Font, language: null|string, shadow: null|Shadow, listStyle: null|array<int, array{alignment: Alignment, bullet: Bullet}>, spacingAfter: null|float, spacingBefore: null|float, lineSpacingMode: null|string, lineSpacing: null|string, rowHeight: null|int, borders: null|Borders, border: null|Border, insetBottom: null|float, insetLeft: null|float, insetRight: null|float, insetTop: null|float, verticalAlignCenter: null|int, visible: null|bool, wrap: null|string, decorative: null|bool}>
      */
     protected $arrayStyles = [];
@@ -784,7 +817,7 @@ class ODPresentation implements ReaderInterface
 
         if ('text:list-style' == $nodeStyle->nodeName) {
             $arrayListStyle = [];
-            foreach ($this->oXMLReader->getElements('text:list-level-style-bullet', $nodeStyle) as $oNodeListLevel) {
+            foreach ($this->oXMLReader->getElements('text:list-level-style-bullet|text:list-level-style-number', $nodeStyle) as $oNodeListLevel) {
                 $oAlignment = new Alignment();
                 $oBullet = new Bullet();
                 $oBullet->setBulletType(Bullet::TYPE_NONE);
@@ -795,6 +828,18 @@ class ODPresentation implements ReaderInterface
                     if ($oNodeListLevel->hasAttribute('text:bullet-char')) {
                         $oBullet->setBulletChar($oNodeListLevel->getAttribute('text:bullet-char'));
                         $oBullet->setBulletType(Bullet::TYPE_BULLET);
+                    }
+                    // A level with an empty number format shows no number
+                    if ('text:list-level-style-number' == $oNodeListLevel->nodeName && '' !== $oNodeListLevel->getAttribute('style:num-format')) {
+                        $oBullet->setBulletType(Bullet::TYPE_NUMERIC);
+                        $oBullet->setBulletNumericStyle($this->getNumericBulletScheme(
+                            $oNodeListLevel->getAttribute('style:num-format'),
+                            $oNodeListLevel->getAttribute('style:num-prefix'),
+                            $oNodeListLevel->getAttribute('style:num-suffix')
+                        ));
+                        if ($oNodeListLevel->hasAttribute('text:start-value')) {
+                            $oBullet->setBulletNumericStartAt(max(1, (int) $oNodeListLevel->getAttribute('text:start-value')));
+                        }
                     }
 
                     $oNodeListProperties = $this->oXMLReader->getElement('style:list-level-properties', $oNodeListLevel);
@@ -2067,6 +2112,12 @@ class ODPresentation implements ReaderInterface
                 continue;
             }
             $itemStyleName = $oNodeItem->getAttribute('text:style-override') ?: $listStyleName;
+            // A start value on an item restarts the numbering there, for the items after it too,
+            // which is what a start on each paragraph of the sequence says in OOXML. A restart at
+            // the value the sequence started from says the same there, and the numbering goes on.
+            if ($oNodeItem->hasAttribute('text:start-value')) {
+                $startAt = max(1, (int) $oNodeItem->getAttribute('text:start-value'));
+            }
             foreach ($this->oXMLReader->getElements('text:p|text:h|text:list', $oNodeItem) as $oNodeListItem) {
                 if (!$oNodeListItem instanceof DOMElement) {
                     continue;
@@ -2076,7 +2127,10 @@ class ODPresentation implements ReaderInterface
                     $this->readList($oShape, $oNodeListItem, $itemStyleName);
                     --$this->levelParagraph;
                 } else {
-                    $this->readListItem($oShape, $oNodeListItem, $itemStyleName, 'text:list-header' == $oNodeItem->nodeName);
+                    $oParagraph = $this->readListItem($oShape, $oNodeListItem, $itemStyleName, 'text:list-header' == $oNodeItem->nodeName);
+                    if (isset($startAt) && Bullet::TYPE_NUMERIC == $oParagraph->getBulletStyle()->getBulletType()) {
+                        $oParagraph->getBulletStyle()->setBulletNumericStartAt($startAt);
+                    }
                 }
             }
         }
@@ -2085,7 +2139,7 @@ class ODPresentation implements ReaderInterface
     /**
      * Read List Item.
      */
-    protected function readListItem(RichText $oShape, DOMElement $oNodeParent, string $listStyleName, bool $isHeader = false): void
+    protected function readListItem(RichText $oShape, DOMElement $oNodeParent, string $listStyleName, bool $isHeader = false): Paragraph
     {
         $oParagraph = $oShape->createParagraph();
         $listLevel = $this->arrayStyles[$listStyleName]['listStyle'][$this->levelParagraph] ?? null;
@@ -2097,6 +2151,30 @@ class ODPresentation implements ReaderInterface
                 $this->readParagraphItem($oParagraph, $oNodeRichTextElement);
             }
         }
+
+        return $oParagraph;
+    }
+
+    /**
+     * The OOXML autonumber scheme an ODF number format, prefix and suffix are read as: the
+     * alphabet and the separator they stand for when OOXML has that pair, the nearest pair of
+     * that alphabet it has when it does not.
+     */
+    protected function getNumericBulletScheme(string $format, string $prefix, string $suffix): string
+    {
+        $separators = ['Period', 'ParenR', 'ParenBoth', 'Plain', 'Minus'];
+        if (isset(self::NUMERIC_BULLET_SEPARATOR[$prefix . '|' . $suffix])) {
+            array_unshift($separators, self::NUMERIC_BULLET_SEPARATOR[$prefix . '|' . $suffix]);
+        }
+        foreach ($separators as $separator) {
+            foreach (self::NUMERIC_BULLET_ALPHABET[$format] ?? ['arabic'] as $alphabet) {
+                if (defined(Bullet::class . '::NUMERIC_' . strtoupper($alphabet . $separator))) {
+                    return $alphabet . $separator;
+                }
+            }
+        }
+
+        return Bullet::NUMERIC_DEFAULT;
     }
 
     /**
