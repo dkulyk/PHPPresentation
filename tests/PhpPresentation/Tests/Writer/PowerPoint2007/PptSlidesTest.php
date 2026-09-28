@@ -39,6 +39,7 @@ use PhpOffice\PhpPresentation\Style\Color;
 use PhpOffice\PhpPresentation\Style\Fill;
 use PhpOffice\PhpPresentation\Style\Font;
 use PhpOffice\PhpPresentation\Tests\PhpPresentationTestCase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use ReflectionClass;
 
 class PptSlidesTest extends PhpPresentationTestCase
@@ -1983,6 +1984,56 @@ class PptSlidesTest extends PhpPresentationTestCase
         $element = '/p:sld/p:cSld/p:spTree/p:graphicFrame/a:graphic/a:graphicData/a:tbl/a:tr/a:tc';
         $this->assertZipXmlElementExists('ppt/slides/slide1.xml', $element . '[@rowSpan="2"]');
         $this->assertZipXmlElementExists('ppt/slides/slide1.xml', $element . '[@vMerge="1"]');
+        $this->assertIsSchemaECMA376Valid();
+    }
+
+    /**
+     * @return array<string, array{array<array{int, int, int, int}>, array<string>}>
+     */
+    public static function dataProviderTableSpans(): array
+    {
+        // [row, cell, colSpan, rowSpan] of each span; per row, the span attributes of each cell
+        return [
+            'two spans in a row' => [[[0, 0, 2, 0], [0, 2, 2, 0]], ['gridSpan=2 hMerge=1 gridSpan=2 hMerge=1', '- - - -', '- - - -']],
+            'a span on a cell a span covers' => [[[0, 0, 2, 0], [0, 1, 2, 0]], ['gridSpan=2 hMerge=1 - -', '- - - -', '- - - -']],
+            'a row span on a cell a row span covers' => [[[0, 0, 0, 2], [1, 0, 0, 2]], ['rowSpan=2 - - -', 'vMerge=1 - - -', '- - - -']],
+            'a block' => [[[0, 1, 2, 2]], ['- gridSpan=2,rowSpan=2 hMerge=1 -', '- vMerge=1 hMerge=1,vMerge=1 -', '- - - -']],
+        ];
+    }
+
+    /**
+     * @dataProvider dataProviderTableSpans
+     *
+     * @param array<array{int, int, int, int}> $spans
+     * @param array<string> $expected
+     */
+    #[DataProvider('dataProviderTableSpans')]
+    public function testTableSpans(array $spans, array $expected): void
+    {
+        $oShape = $this->oPresentation->getActiveSlide()->createTableShape(4);
+        for ($row = 0; $row < 3; ++$row) {
+            $oShape->createRow();
+        }
+        foreach ($spans as [$row, $cell, $colSpan, $rowSpan]) {
+            $oShape->getRow($row)->getCell($cell)->setColSpan($colSpan)->setRowSpan($rowSpan);
+        }
+
+        $this->writePresentationFile($this->oPresentation, $this->writerName);
+        $actual = [];
+        foreach ($this->getXmlDom('ppt/slides/slide1.xml')->getElementsByTagName('tr') as $oRow) {
+            $cells = [];
+            foreach ($oRow->getElementsByTagName('tc') as $oCell) {
+                $attributes = [];
+                foreach (['gridSpan', 'rowSpan', 'hMerge', 'vMerge'] as $name) {
+                    if ($oCell->hasAttribute($name)) {
+                        $attributes[] = $name . '=' . $oCell->getAttribute($name);
+                    }
+                }
+                $cells[] = implode(',', $attributes) ?: '-';
+            }
+            $actual[] = implode(' ', $cells);
+        }
+        self::assertEquals($expected, $actual);
         $this->assertIsSchemaECMA376Valid();
     }
 
