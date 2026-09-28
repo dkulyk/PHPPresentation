@@ -1132,6 +1132,7 @@ class PptSlidesTest extends PhpPresentationTestCase
         $element = '/p:sld/p:cSld/p:spTree/p:sp/p:nvSpPr/p:cNvPr';
         $this->assertZipXmlElementExists('ppt/slides/slide1.xml', $element);
         $this->assertZipXmlAttributeEquals('ppt/slides/slide1.xml', $element, 'name', 'Placeholder for sldNum');
+        $this->assertZipXmlAttributeNotExists('ppt/slides/slide1.xml', '/p:sld/p:cSld/p:spTree/p:sp/p:nvSpPr/p:cNvSpPr', 'txBox');
         $element = '/p:sld/p:cSld/p:spTree/p:sp/p:nvSpPr/p:nvPr/p:ph';
         $this->assertZipXmlElementExists('ppt/slides/slide1.xml', $element);
         $this->assertZipXmlAttributeEquals('ppt/slides/slide1.xml', $element, 'type', $expectedType);
@@ -1154,6 +1155,17 @@ class PptSlidesTest extends PhpPresentationTestCase
         $element = '/p:sld/p:cSld/p:spTree/p:sp/p:txBody/a:p/a:fld/a:t';
         $this->assertZipXmlElementExists('ppt/slides/slide1.xml', $element);
         $this->assertZipXmlElementEquals('ppt/slides/slide1.xml', $element, '<nr.>');
+    }
+
+    public function testPlaceHolderName(): void
+    {
+        $oRichText = $this->oPresentation->getActiveSlide()->createRichTextShape();
+        $oRichText->setPlaceHolder(new Placeholder(Placeholder::PH_TYPE_TITLE))->setName('Slide title');
+        $oRichText->createTextRun('Test');
+
+        $element = '/p:sld/p:cSld/p:spTree/p:sp/p:nvSpPr/p:cNvPr';
+        $this->assertZipXmlAttributeEquals('ppt/slides/slide1.xml', $element, 'name', 'Slide title');
+        $this->assertIsSchemaECMA376Valid();
     }
 
     public function testPlaceHolderWithIdx(): void
