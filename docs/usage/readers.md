@@ -164,7 +164,7 @@ model, with the exceptions its notes list.
 | **Text** | Paragraph alignment and indent | :material-close: | :material-alert-outline:<sup>36</sup> | :material-alert-outline:<sup>37</sup> | :material-check: | :material-check: |
 |  | Line spacing, spacing before/after | :material-close: | :material-alert-outline:<sup>38</sup> | :material-close: | :material-check: | :material-check: |
 |  | Bullets (character, colour, size) | :material-close: | :material-alert-outline:<sup>39</sup> | :material-alert-outline:<sup>40</sup> | :material-check: | :material-check: |
-|  | Numbered lists (format, start) | :material-close: | :material-close: | :material-close: | :material-check: | :material-check: |
+|  | Numbered lists (format, start) | :material-close: | :material-check: | :material-close: | :material-check: | :material-check: |
 |  | Font: name, size, bold, italic, colour | :material-close: | :material-check: | :material-alert-outline:<sup>41</sup> | :material-check: | :material-check: |
 |  | Font: underline, strikethrough, superscript/subscript, caps | :material-close: | :material-alert-outline:<sup>42</sup> | :material-alert-outline:<sup>43</sup> | :material-check: | :material-check: |
 |  | Language of a run | :material-close: | :material-check: | :material-close: | :material-check: | :material-check: |
