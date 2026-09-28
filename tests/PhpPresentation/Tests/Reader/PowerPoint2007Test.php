@@ -2037,6 +2037,33 @@ class PowerPoint2007Test extends TestCase
         self::assertTrue($arrayShape[1]->isBandRow());
     }
 
+    public function testTableSpans(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oTable = $oPhpPresentation->getActiveSlide()->createTableShape(4);
+        $oRow = $oTable->createRow();
+        $oRow->getCell(0)->setColSpan(2)->setRowSpan(2);
+        // covered by the span before it, so its own is not written
+        $oRow->getCell(1)->setColSpan(2);
+        $oRow->getCell(2)->setColSpan(2);
+        $oTable->createRow();
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new PowerPoint2007Writer($oPhpPresentation))->save($file);
+        $oPhpPresentationRead = (new PowerPoint2007())->load($file);
+        unlink($file);
+
+        $oTableRead = $oPhpPresentationRead->getActiveSlide()->getShapeCollection()[0];
+        self::assertInstanceOf(Table::class, $oTableRead);
+        $spans = [];
+        foreach ($oTableRead->getRows() as $oRowRead) {
+            foreach ($oRowRead->getCells() as $oCell) {
+                $spans[] = $oCell->getColSpan() . 'x' . $oCell->getRowSpan();
+            }
+        }
+        self::assertEquals(['2x2', '0x0', '2x0', '0x0', '0x0', '0x0', '0x0', '0x0'], $spans);
+    }
+
     /**
      * @return array<array{string, string}>
      */
