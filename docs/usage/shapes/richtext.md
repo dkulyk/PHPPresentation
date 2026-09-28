@@ -177,6 +177,10 @@ $paragraph->getBulletStyle()->setBulletType(Bullet::TYPE_BULLET);
 $paragraph->getBulletStyle()->setBulletColor(new Color(Color::COLOR_RED));
 ```
 
+A bullet given no colour, which is the default, takes the colour of its text. OpenDocument has no
+such colour for a marker, so the ODPresentation Writer leaves it to the application, which draws it
+in its automatic colour.
+
 A numbered list is the `Bullet::TYPE_NUMERIC` type. The scheme it is numbered with is one of the
 `Bullet::NUMERIC_*` constants, and the number it starts at is `setBulletNumericStartAt()`.
 The start is a number whatever the scheme, from 1 to 32767: the example below starts at "(c)",

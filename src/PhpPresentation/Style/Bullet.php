@@ -98,9 +98,9 @@ class Bullet implements ComparableInterface
     private $bulletChar = '-';
 
     /**
-     * Bullet char.
+     * Bullet colour, or null for the colour of the text it marks.
      *
-     * @var Color
+     * @var null|Color
      */
     private $bulletColor;
 
@@ -137,7 +137,6 @@ class Bullet implements ComparableInterface
         $this->bulletType = self::TYPE_NONE;
         $this->bulletFont = 'Calibri';
         $this->bulletChar = '-';
-        $this->bulletColor = new Color();
         $this->bulletNumericStyle = self::NUMERIC_DEFAULT;
         $this->bulletNumericStartAt = null;
     }
@@ -339,9 +338,9 @@ class Bullet implements ComparableInterface
     }
 
     /**
-     * @return Color
+     * The colour of the marker, or null when it takes the colour of the text it marks.
      */
-    public function getBulletColor()
+    public function getBulletColor(): ?Color
     {
         return $this->bulletColor;
     }
@@ -349,7 +348,7 @@ class Bullet implements ComparableInterface
     /**
      * @return Bullet
      */
-    public function setBulletColor(Color $bulletColor)
+    public function setBulletColor(?Color $bulletColor = null)
     {
         $this->bulletColor = $bulletColor;
 

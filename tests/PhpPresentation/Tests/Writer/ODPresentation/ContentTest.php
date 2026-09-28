@@ -710,6 +710,26 @@ class ContentTest extends PhpPresentationTestCase
         $this->assertIsSchemaOpenDocumentValid('1.2');
     }
 
+    public function testListBulletColor(): void
+    {
+        $oSlide = $this->oPresentation->getActiveSlide();
+        foreach ([null, 'FFFF0000'] as $color) {
+            $oShape = $oSlide->createRichTextShape();
+            $oBullet = $oShape->getActiveParagraph()->getBulletStyle()->setBulletType(Bullet::TYPE_BULLET);
+            if (null !== $color) {
+                $oBullet->setBulletColor(new Color($color));
+            }
+            $oShape->createTextRun('Item');
+        }
+
+        $element = '/office:document-content/office:automatic-styles/text:list-style[@style:name="%s"]/text:list-level-style-bullet/style:text-properties';
+        $this->assertZipXmlAttributeEquals('content.xml', sprintf($element, 'L1'), 'style:use-window-font-color', 'true');
+        $this->assertZipXmlAttributeNotExists('content.xml', sprintf($element, 'L1'), 'fo:color');
+        $this->assertZipXmlAttributeEquals('content.xml', sprintf($element, 'L2'), 'fo:color', '#FF0000');
+        $this->assertZipXmlAttributeNotExists('content.xml', sprintf($element, 'L2'), 'style:use-window-font-color');
+        $this->assertIsSchemaOpenDocumentValid('1.2');
+    }
+
     public function testListThatSkipsALevelClosesWhereItOpens(): void
     {
         $oSlide = $this->oPresentation->getActiveSlide();

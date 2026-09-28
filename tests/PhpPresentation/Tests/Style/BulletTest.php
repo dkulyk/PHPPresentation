@@ -66,13 +66,14 @@ class BulletTest extends TestCase
 
         $expectedARGB = '01234567';
 
-        // default
-        self::assertInstanceOf('PhpOffice\\PhpPresentation\\Style\\Color', $object->getBulletColor());
-        self::assertEquals(Color::COLOR_BLACK, $object->getBulletColor()->getARGB());
+        // default: the colour of the text
+        self::assertNull($object->getBulletColor());
 
         self::assertInstanceOf('PhpOffice\\PhpPresentation\\Style\\Bullet', $object->setBulletColor(new Color($expectedARGB)));
         self::assertInstanceOf('PhpOffice\\PhpPresentation\\Style\\Color', $object->getBulletColor());
         self::assertEquals($expectedARGB, $object->getBulletColor()->getARGB());
+
+        self::assertNull($object->setBulletColor()->getBulletColor());
     }
 
     /**
