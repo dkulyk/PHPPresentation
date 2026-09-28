@@ -842,15 +842,19 @@ class ODPresentation implements ReaderInterface
                         }
                     }
 
+                    // The marker stands at `text:space-before` and the text at the width of the
+                    // label further in, a hanging indent; LibreOffice leaves out a length of 0. In
+                    // the label alignment mode of ODF 1.2 the two are a margin and an indent.
                     $oNodeListProperties = $this->oXMLReader->getElement('style:list-level-properties', $oNodeListLevel);
                     if ($oNodeListProperties instanceof DOMElement) {
-                        if ($oNodeListProperties->hasAttribute('text:min-label-width')) {
-                            $oAlignment->setIndent(CommonDrawing::centimetersToPixels((float) substr($oNodeListProperties->getAttribute('text:min-label-width'), 0, -2)));
-                        }
-                        if ($oNodeListProperties->hasAttribute('text:space-before')) {
-                            $iSpaceBefore = CommonDrawing::centimetersToPixels((float) substr($oNodeListProperties->getAttribute('text:space-before'), 0, -2));
-                            $iMarginLeft = $iSpaceBefore + $oAlignment->getIndent();
-                            $oAlignment->setMarginLeft($iMarginLeft);
+                        $iSpaceBefore = CommonDrawing::centimetersToPixels((float) substr($oNodeListProperties->getAttribute('text:space-before'), 0, -2));
+                        $iLabelWidth = CommonDrawing::centimetersToPixels((float) substr($oNodeListProperties->getAttribute('text:min-label-width'), 0, -2));
+                        $oAlignment->setIndent(-$iLabelWidth);
+                        $oAlignment->setMarginLeft($iSpaceBefore + $iLabelWidth);
+                        $oNodeLabelAlignment = $this->oXMLReader->getElement('style:list-level-label-alignment', $oNodeListProperties);
+                        if ('label-alignment' === $oNodeListProperties->getAttribute('text:list-level-position-and-space-mode') && $oNodeLabelAlignment instanceof DOMElement) {
+                            $oAlignment->setIndent(CommonDrawing::centimetersToPixels((float) substr($oNodeLabelAlignment->getAttribute('fo:text-indent'), 0, -2)));
+                            $oAlignment->setMarginLeft(CommonDrawing::centimetersToPixels((float) substr($oNodeLabelAlignment->getAttribute('fo:margin-left'), 0, -2)));
                         }
                     }
 
