@@ -338,8 +338,11 @@ class Alignment implements ComparableInterface
             . $this->vertical
             . $this->level
             . $this->indent
+            . $this->textDirection
             . $this->marginLeft
             . $this->marginRight
+            . $this->marginTop
+            . $this->marginBottom
             . ($this->isRTL ? '1' : '0')
             . __CLASS__
         );

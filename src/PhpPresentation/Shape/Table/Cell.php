@@ -24,6 +24,7 @@ use PhpOffice\PhpPresentation\ComparableInterface;
 use PhpOffice\PhpPresentation\Exception\OutOfBoundsException;
 use PhpOffice\PhpPresentation\Shape\RichText\Paragraph;
 use PhpOffice\PhpPresentation\Shape\RichText\TextElementInterface;
+use PhpOffice\PhpPresentation\Style\Alignment;
 use PhpOffice\PhpPresentation\Style\Borders;
 use PhpOffice\PhpPresentation\Style\Fill;
 
@@ -59,6 +60,13 @@ class Cell implements ComparableInterface
      * @var Borders
      */
     private $borders;
+
+    /**
+     * The margins between the borders and the text, the vertical alignment and the text direction.
+     *
+     * @var Alignment
+     */
+    private $alignment;
 
     /**
      * Width (in pixels).
@@ -104,6 +112,8 @@ class Cell implements ComparableInterface
 
         // Set borders
         $this->borders = new Borders();
+
+        $this->alignment = new Alignment();
     }
 
     /**
@@ -319,6 +329,24 @@ class Cell implements ComparableInterface
     }
 
     /**
+     * The margins between the borders and the text (`setMargin*()`), the vertical alignment
+     * (`setVertical()`) and the text direction (`setTextDirection()`) of the cell. The other
+     * properties of an Alignment belong to a paragraph and are not used here; leave `horizontal`
+     * as it is, as a left or right margin is only kept with a left or right `horizontal`.
+     */
+    public function getAlignment(): Alignment
+    {
+        return $this->alignment;
+    }
+
+    public function setAlignment(Alignment $alignment): self
+    {
+        $this->alignment = $alignment;
+
+        return $this;
+    }
+
+    /**
      * Get width.
      *
      * @return int
@@ -376,7 +404,7 @@ class Cell implements ComparableInterface
             $hashElements .= $element->getHashCode();
         }
 
-        return md5($hashElements . $this->fill->getHashCode() . $this->borders->getHashCode() . $this->width . __CLASS__);
+        return md5($hashElements . $this->fill->getHashCode() . $this->borders->getHashCode() . $this->alignment->getHashCode() . $this->width . __CLASS__);
     }
 
     /**

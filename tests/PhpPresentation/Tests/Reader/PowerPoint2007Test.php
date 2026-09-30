@@ -2015,6 +2015,64 @@ class PowerPoint2007Test extends TestCase
         self::assertEquals(Fill::FILL_UNSET, $arrayShape[0]->getFill()->getFillType());
     }
 
+    public function testTableCellAlignmentIsReadIntoTheCell(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oCell = $oPhpPresentation->getActiveSlide()->createTableShape(1)->createRow()->nextCell();
+        $oCell->createTextRun('Cell');
+        $oCell->getActiveParagraph()->getAlignment()->setMarginLeft(5);
+        $oCell->getAlignment()
+            ->setMarginLeft(10)
+            ->setMarginRight(20)
+            ->setMarginTop(30)
+            ->setMarginBottom(40)
+            ->setVertical(Alignment::VERTICAL_CENTER)
+            ->setTextDirection(Alignment::TEXT_DIRECTION_VERTICAL_270);
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new PowerPoint2007Writer($oPhpPresentation))->save($file);
+        $oPhpPresentationRead = (new PowerPoint2007())->load($file);
+        unlink($file);
+
+        $oTable = $oPhpPresentationRead->getActiveSlide()->getShapeCollection()[0];
+        self::assertInstanceOf(Table::class, $oTable);
+        $oCellRead = $oTable->getRow(0)->getCell(0);
+        $oAlignment = $oCellRead->getAlignment();
+        self::assertEquals(10, $oAlignment->getMarginLeft());
+        self::assertEquals(20, $oAlignment->getMarginRight());
+        self::assertEquals(30, $oAlignment->getMarginTop());
+        self::assertEquals(40, $oAlignment->getMarginBottom());
+        self::assertEquals(Alignment::VERTICAL_CENTER, $oAlignment->getVertical());
+        self::assertEquals(Alignment::TEXT_DIRECTION_VERTICAL_270, $oAlignment->getTextDirection());
+        // The paragraph keeps its own margins
+        self::assertEquals(5, $oCellRead->getParagraph(0)->getAlignment()->getMarginLeft());
+        self::assertEquals(0, $oCellRead->getParagraph(0)->getAlignment()->getMarginTop());
+    }
+
+    public function testTableCellMarginsLeftOutAreTheDrawingMLDefaults(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oPhpPresentation->getActiveSlide()->createTableShape(1)->createRow()->nextCell()->createTextRun('Cell');
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new PowerPoint2007Writer($oPhpPresentation))->save($file);
+        // As PowerPoint writes a cell with the default margins: none named
+        $zip = new ZipArchive();
+        $zip->open($file);
+        $zip->addFromString('ppt/slides/slide1.xml', str_replace(' marL="0" marR="0" marT="0" marB="0"', '', (string) $zip->getFromName('ppt/slides/slide1.xml')));
+        $zip->close();
+        $oPhpPresentationRead = (new PowerPoint2007())->load($file);
+        unlink($file);
+
+        $oTable = $oPhpPresentationRead->getActiveSlide()->getShapeCollection()[0];
+        self::assertInstanceOf(Table::class, $oTable);
+        $oAlignment = $oTable->getRow(0)->getCell(0)->getAlignment();
+        // 91440 and 45720 EMU
+        self::assertEquals(9.6, $oAlignment->getMarginLeft());
+        self::assertEquals(9.6, $oAlignment->getMarginRight());
+        self::assertEquals(4.8, $oAlignment->getMarginTop());
+        self::assertEquals(4.8, $oAlignment->getMarginBottom());
+    }
+
     public function testTableFirstRowAndBandRow(): void
     {
         $oPhpPresentation = new PhpPresentation();
