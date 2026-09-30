@@ -106,10 +106,8 @@ $cellA2 = $row->getCell(1);
 ```
 
 ### Define margins
-Margins of cells are defined by margins of the first paragraph of cell.
-Margins of cells are defined in pixels.
-
-For defining margins of cell, you can use the `setMargin*` method of a Alignment object of the active paragraph of a Cell object.
+The margins of a cell are the space between its borders and its text, in pixels.
+They are set with the `setMargin*` methods of the `getAlignment` method of a Cell object.
 
 ``` php
 <?php
@@ -117,12 +115,14 @@ For defining margins of cell, you can use the `setMargin*` method of a Alignment
 $tableShape = $slide->createTableShape($columns);
 $row = $tableShape->createRow();
 $cellA1 = $row->nextCell();
-$cellA1->getActiveParagraph()->getAlignment()
+$cellA1->getAlignment()
     ->setMarginBottom(20)
     ->setMarginLeft(40)
     ->setMarginRight(60)
     ->setMarginTop(80);
 ```
+
+The margins of a paragraph (`$cellA1->getActiveParagraph()->getAlignment()`) are those of the paragraph inside the cell: its left and right margins add to the margins of the cell, its top and bottom margins are not written.
 
 ### Define the borders
 For defining the borders of a cell, you can use the `getBorders` method of a Cell object.
@@ -152,7 +152,6 @@ style, and `LINE_NONE` outranks both.
 
 ### Define the text direction
 For defining the text direction of cell, you can use the `setTextDirection` method of the `getAlignment` method of a Cell object.
-The width is in pixels.
 
 ``` php
 <?php
@@ -163,6 +162,17 @@ $tableShape = $slide->createTableShape($columns);
 $row = $tableShape->createRow();
 $cellA1 = $row->nextCell();
 $cellA1->getAlignment()->setTextDirection(Alignment::TEXT_DIRECTION_VERTICAL_270);
+```
+
+### Define the vertical alignment
+For defining where the text of a cell sits between its top and bottom borders, you can use the `setVertical` method of the `getAlignment` method of a Cell object.
+
+``` php
+<?php
+
+use PhpOffice\PhpPresentation\Style\Alignment;
+
+$cellA1->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
 ```
 
 ### Define the width

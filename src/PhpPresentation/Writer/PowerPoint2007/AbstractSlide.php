@@ -566,25 +566,25 @@ abstract class AbstractSlide extends AbstractDecoratorWriter
                 $objWriter->endElement();
                 // a:tcPr
                 $objWriter->startElement('a:tcPr');
-                $firstParagraph = $currentCell->getParagraph(0);
-                $firstParagraphAlignment = $firstParagraph->getAlignment();
+                // The cell's own alignment, not its first paragraph's: that one's margins are the paragraph's
+                $cellAlignment = $currentCell->getAlignment();
 
                 // Text Direction
-                $textDirection = $firstParagraphAlignment->getTextDirection();
+                $textDirection = $cellAlignment->getTextDirection();
                 if (Alignment::TEXT_DIRECTION_HORIZONTAL != $textDirection) {
                     $objWriter->writeAttribute('vert', $textDirection);
                 }
                 // Alignment (horizontal)
-                $verticalAlign = $firstParagraphAlignment->getVertical();
+                $verticalAlign = $cellAlignment->getVertical();
                 if (Alignment::VERTICAL_BASE != $verticalAlign && Alignment::VERTICAL_AUTO != $verticalAlign) {
                     $objWriter->writeAttribute('anchor', $verticalAlign);
                 }
 
                 // Margins
-                $objWriter->writeAttribute('marL', CommonDrawing::pixelsToEmu($firstParagraphAlignment->getMarginLeft()));
-                $objWriter->writeAttribute('marR', CommonDrawing::pixelsToEmu($firstParagraphAlignment->getMarginRight()));
-                $objWriter->writeAttribute('marT', CommonDrawing::pixelsToEmu($firstParagraphAlignment->getMarginTop()));
-                $objWriter->writeAttribute('marB', CommonDrawing::pixelsToEmu($firstParagraphAlignment->getMarginBottom()));
+                $objWriter->writeAttribute('marL', CommonDrawing::pixelsToEmu($cellAlignment->getMarginLeft()));
+                $objWriter->writeAttribute('marR', CommonDrawing::pixelsToEmu($cellAlignment->getMarginRight()));
+                $objWriter->writeAttribute('marT', CommonDrawing::pixelsToEmu($cellAlignment->getMarginTop()));
+                $objWriter->writeAttribute('marB', CommonDrawing::pixelsToEmu($cellAlignment->getMarginBottom()));
 
                 // Determine borders
                 $borderLeft = $currentCell->getBorders()->getLeft();
