@@ -2070,6 +2070,32 @@ class ODPresentationTest extends TestCase
         ], $read);
     }
 
+    public function testListBulletColorSurvivesTheRoundTrip(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        foreach ([null, 'FFFF0000'] as $color) {
+            $oShape = $oPhpPresentation->getActiveSlide()->createRichTextShape();
+            $oBullet = $oShape->getActiveParagraph()->getBulletStyle()->setBulletType(Bullet::TYPE_BULLET);
+            if (null !== $color) {
+                $oBullet->setBulletColor(new Color($color));
+            }
+            $oShape->createTextRun('Item');
+        }
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new ODPresentationWriter($oPhpPresentation))->save($file);
+        $oPhpPresentationRead = (new ODPresentation())->load($file);
+        unlink($file);
+
+        $read = [];
+        foreach ($oPhpPresentationRead->getActiveSlide()->getShapeCollection() as $oShape) {
+            self::assertInstanceOf(RichText::class, $oShape);
+            $oColor = $oShape->getParagraph(0)->getBulletStyle()->getBulletColor();
+            $read[] = null === $oColor ? null : $oColor->getARGB();
+        }
+        self::assertEquals([null, 'FFFF0000'], $read);
+    }
+
     public function testListIndentSurvivesTheRoundTrip(): void
     {
         $oPhpPresentation = new PhpPresentation();

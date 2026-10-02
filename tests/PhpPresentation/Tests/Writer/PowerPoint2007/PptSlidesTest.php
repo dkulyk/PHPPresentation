@@ -749,6 +749,18 @@ class PptSlidesTest extends PhpPresentationTestCase
         $this->assertZipXmlElementNotExists('ppt/slides/slide1.xml', $element);
     }
 
+    public function testListBulletWithoutColorTakesTheColorOfTheText(): void
+    {
+        $oRichText = $this->oPresentation->getActiveSlide()->createRichTextShape();
+        $oRichText->getActiveParagraph()->getBulletStyle()->setBulletType(Bullet::TYPE_BULLET);
+        $oRichText->createTextRun('Alpha');
+
+        $element = '/p:sld/p:cSld/p:spTree/p:sp/p:txBody/a:p/a:pPr';
+        $this->assertZipXmlElementExists('ppt/slides/slide1.xml', $element . '/a:buChar');
+        $this->assertZipXmlElementNotExists('ppt/slides/slide1.xml', $element . '/a:buClr');
+        $this->assertIsSchemaECMA376Valid();
+    }
+
     public function testListBullet(): void
     {
         $oSlide = $this->oPresentation->getActiveSlide();

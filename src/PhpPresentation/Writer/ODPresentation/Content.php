@@ -49,6 +49,7 @@ use PhpOffice\PhpPresentation\Slide\Transition;
 use PhpOffice\PhpPresentation\Style\Alignment;
 use PhpOffice\PhpPresentation\Style\Border;
 use PhpOffice\PhpPresentation\Style\Bullet;
+use PhpOffice\PhpPresentation\Style\Color;
 use PhpOffice\PhpPresentation\Style\Fill;
 use PhpOffice\PhpPresentation\Style\Font;
 use PhpOffice\PhpPresentation\Style\Shadow;
@@ -514,7 +515,12 @@ class Content extends AbstractDecoratorWriter
         $objWriter->startElement('style:text-properties');
         $objWriter->writeAttribute('fo:font-family', $oStyle->getBulletFont());
         $objWriter->writeAttribute('style:font-family-generic', 'swiss');
-        $objWriter->writeAttribute('style:use-window-font-color', 'true');
+        // A marker with no colour of its own takes the one of its text
+        if ($oStyle->getBulletColor() instanceof Color) {
+            $objWriter->writeAttribute('fo:color', '#' . $oStyle->getBulletColor()->getRGB());
+        } else {
+            $objWriter->writeAttribute('style:use-window-font-color', 'true');
+        }
         $objWriter->writeAttribute('fo:font-size', '100%');
         $objWriter->endElement();
         $objWriter->endElement();

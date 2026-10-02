@@ -863,6 +863,11 @@ class ODPresentation implements ReaderInterface
                         if ($oNodeTextProperties->hasAttribute('fo:font-family')) {
                             $oBullet->setBulletFont($oNodeTextProperties->getAttribute('fo:font-family'));
                         }
+                        // `style:use-window-font-color` wins over `fo:color`, and gives the marker
+                        // the colour of its text
+                        if ($oNodeTextProperties->hasAttribute('fo:color') && 'true' !== $oNodeTextProperties->getAttribute('style:use-window-font-color')) {
+                            $oBullet->setBulletColor(new Color('FF' . substr($oNodeTextProperties->getAttribute('fo:color'), -6)));
+                        }
                     }
                 }
 
