@@ -512,8 +512,30 @@ abstract class AbstractSlide extends AbstractDecoratorWriter
         }
         // p:graphicFrame/a:graphic/a:graphicData/a:tbl/a:tblGrid/
         $objWriter->endElement();
-        // Colspan / rowspan containers
-        $colSpan = $rowSpan = [];
+        // The cells a span covers: hMerge right of the cell that starts it, vMerge below it. A
+        // covered cell starts no span of its own.
+        /** @var array<int, array<int, true>> $hMerge */
+        $hMerge = [];
+        /** @var array<int, array<int, true>> $vMerge */
+        $vMerge = [];
+        foreach ($shape->getRows() as $row => $oRow) {
+            foreach ($oRow->getCells() as $cell => $oCell) {
+                if (isset($hMerge[$row][$cell]) || isset($vMerge[$row][$cell])) {
+                    continue;
+                }
+                // a span is 0 when it was never set
+                for ($i = 0; $i < max(1, $oCell->getRowSpan()); ++$i) {
+                    for ($j = 0; $j < max(1, $oCell->getColSpan()); ++$j) {
+                        if ($j > 0) {
+                            $hMerge[$row + $i][$cell + $j] = true;
+                        }
+                        if ($i > 0) {
+                            $vMerge[$row + $i][$cell + $j] = true;
+                        }
+                    }
+                }
+            }
+        }
         // Default border style
         $defaultBorder = new Border();
         // Write rows
@@ -533,21 +555,12 @@ abstract class AbstractSlide extends AbstractDecoratorWriter
                 $hasNextRowBelow = $shape->hasRow($row + 1);
                 // a:tc
                 $objWriter->startElement('a:tc');
-                // Colspan
-                if ($currentCell->getColSpan() > 1) {
-                    $objWriter->writeAttribute('gridSpan', $currentCell->getColSpan());
-                    $colSpan[$row] = $currentCell->getColSpan() - 1;
-                } elseif (isset($colSpan[$row]) && $colSpan[$row] > 0) {
-                    --$colSpan[$row];
-                    $objWriter->writeAttribute('hMerge', '1');
-                }
-                // Rowspan
-                if ($currentCell->getRowSpan() > 1) {
-                    $objWriter->writeAttribute('rowSpan', $currentCell->getRowSpan());
-                    $rowSpan[$cell] = $currentCell->getRowSpan() - 1;
-                } elseif (isset($rowSpan[$cell]) && $rowSpan[$cell] > 0) {
-                    --$rowSpan[$cell];
-                    $objWriter->writeAttribute('vMerge', '1');
+                if (isset($hMerge[$row][$cell]) || isset($vMerge[$row][$cell])) {
+                    $objWriter->writeAttributeIf(isset($hMerge[$row][$cell]), 'hMerge', '1');
+                    $objWriter->writeAttributeIf(isset($vMerge[$row][$cell]), 'vMerge', '1');
+                } else {
+                    $objWriter->writeAttributeIf($currentCell->getColSpan() > 1, 'gridSpan', $currentCell->getColSpan());
+                    $objWriter->writeAttributeIf($currentCell->getRowSpan() > 1, 'rowSpan', $currentCell->getRowSpan());
                 }
                 // a:txBody
                 $objWriter->startElement('a:txBody');
