@@ -49,6 +49,7 @@ use PhpOffice\PhpPresentation\Style\Shadow;
 use PhpOffice\PhpPresentation\Writer\ODPresentation as ODPresentationWriter;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
 use ZipArchive;
 
 /**
@@ -1963,6 +1964,109 @@ class ODPresentationTest extends TestCase
             [Bullet::TYPE_BULLET, '–'],
             [Bullet::TYPE_BULLET, '–'],
             [Bullet::TYPE_BULLET, '–'],
+        ], $read);
+    }
+
+    public function testNumberedListSurvivesTheRoundTrip(): void
+    {
+        $schemes = array_unique(array_filter(
+            (new ReflectionClass(Bullet::class))->getConstants(),
+            static function (string $name): bool {
+                return 0 === strpos($name, 'NUMERIC_');
+            },
+            ARRAY_FILTER_USE_KEY
+        ));
+        $oPhpPresentation = new PhpPresentation();
+        foreach ($schemes as $scheme) {
+            $oShape = $oPhpPresentation->getActiveSlide()->createRichTextShape();
+            $oShape->getActiveParagraph()->getBulletStyle()->setBulletType(Bullet::TYPE_NUMERIC)->setBulletNumericStyle($scheme)->setBulletNumericStartAt(3);
+            $oShape->createTextRun('Item');
+        }
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new ODPresentationWriter($oPhpPresentation))->save($file);
+        $oPhpPresentationRead = (new ODPresentation())->load($file);
+        unlink($file);
+
+        // ODF has one number format for the alphabets below, or none at all and the Writer
+        // writes them as arabic; each comes back as the first scheme with that format
+        $expected = array_combine($schemes, $schemes);
+        $expected[Bullet::NUMERIC_CIRCLENUMWDBLACKPLAIN] = Bullet::NUMERIC_CIRCLENUMDBPLAIN;
+        $expected[Bullet::NUMERIC_CIRCLENUMWDWHITEPLAIN] = Bullet::NUMERIC_CIRCLENUMDBPLAIN;
+        $expected[Bullet::NUMERIC_THAINUMPERIOD] = Bullet::NUMERIC_THAIALPHAPERIOD;
+        $expected[Bullet::NUMERIC_THAINUMPARENR] = Bullet::NUMERIC_THAIALPHAPARENR;
+        $expected[Bullet::NUMERIC_THAINUMPARENBOTH] = Bullet::NUMERIC_THAIALPHAPARENBOTH;
+        $expected[Bullet::NUMERIC_ARABIC2MINUS] = Bullet::NUMERIC_ARABIC1MINUS;
+        foreach ([Bullet::NUMERIC_ARABICDBPERIOD, Bullet::NUMERIC_EA1JPNCHSDBPERIOD, Bullet::NUMERIC_EA1JPNKORPERIOD, Bullet::NUMERIC_HINDIALPHAPERIOD, Bullet::NUMERIC_HINDINUMPERIOD, Bullet::NUMERIC_HINDIALPHA1PERIOD] as $scheme) {
+            $expected[$scheme] = Bullet::NUMERIC_ARABICPERIOD;
+        }
+        foreach ([Bullet::NUMERIC_ARABICDBPLAIN, Bullet::NUMERIC_EA1JPNKORPLAIN] as $scheme) {
+            $expected[$scheme] = Bullet::NUMERIC_ARABICPLAIN;
+        }
+        $expected[Bullet::NUMERIC_HINDINUMPARENR] = Bullet::NUMERIC_ARABICPARENR;
+
+        $read = [];
+        foreach (array_values($oPhpPresentationRead->getActiveSlide()->getShapeCollection()) as $i => $oShape) {
+            self::assertInstanceOf(RichText::class, $oShape);
+            $oBullet = $oShape->getParagraph(0)->getBulletStyle();
+            self::assertEquals(Bullet::TYPE_NUMERIC, $oBullet->getBulletType());
+            self::assertEquals(3, $oBullet->getBulletNumericStartAt());
+            $read[array_values($schemes)[$i]] = $oBullet->getBulletNumericStyle();
+        }
+        self::assertEquals($expected, $read);
+    }
+
+    public function testNumberedListRestartAndEmptyFormat(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        foreach ([Bullet::NUMERIC_ARABICPERIOD, Bullet::NUMERIC_ALPHALCPERIOD] as $scheme) {
+            $oShape = $oPhpPresentation->getActiveSlide()->createRichTextShape();
+            foreach ([0, 1, 2] as $i) {
+                $oParagraph = 0 === $i ? $oShape->getActiveParagraph() : $oShape->createParagraph();
+                $oParagraph->getBulletStyle()->setBulletType(Bullet::TYPE_NUMERIC)->setBulletNumericStyle($scheme);
+                $oParagraph->createTextRun('Item ' . $i);
+            }
+        }
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new ODPresentationWriter($oPhpPresentation))->save($file);
+
+        // The first list restarts at 4 on its second item, as LibreOffice writes a list whose
+        // numbering starts anew, and at 0, below the first number there is, on its third; the
+        // second one has an empty format, which shows no number
+        $oZip = new ZipArchive();
+        $oZip->open($file);
+        $sContent = $oZip->getFromName('content.xml');
+        self::assertIsString($sContent);
+        $sContent = preg_replace(
+            '#(<text:list text:style-name="L1"><text:list-item>.*?</text:list-item>)<text:list-item>(.*?</text:list-item>)<text:list-item>#',
+            '$1<text:list-item text:start-value="4">$2<text:list-item text:start-value="0">',
+            $sContent,
+            1
+        );
+        $sContent = str_replace('style:num-format="a"', 'style:num-format=""', (string) $sContent);
+        $oZip->deleteName('content.xml');
+        $oZip->addFromString('content.xml', $sContent);
+        $oZip->close();
+
+        $oPhpPresentationRead = (new ODPresentation())->load($file);
+        unlink($file);
+
+        $read = [];
+        foreach ($oPhpPresentationRead->getActiveSlide()->getShapeCollection() as $oShape) {
+            self::assertInstanceOf(RichText::class, $oShape);
+            foreach ($oShape->getParagraphs() as $oParagraph) {
+                $read[] = [$oParagraph->getBulletStyle()->getBulletType(), $oParagraph->getBulletStyle()->getBulletNumericStartAt()];
+            }
+        }
+        // an item given no start has none: null, as a new Bullet has
+        self::assertSame([
+            [Bullet::TYPE_NUMERIC, null],
+            [Bullet::TYPE_NUMERIC, 4],
+            [Bullet::TYPE_NUMERIC, 1],
+            [Bullet::TYPE_NONE, null],
+            [Bullet::TYPE_NONE, null],
+            [Bullet::TYPE_NONE, null],
         ], $read);
     }
 
