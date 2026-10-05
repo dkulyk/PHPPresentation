@@ -83,6 +83,41 @@ files, where LibreOffice Impress reads it. Both readers restore the flag when th
 it; the ODPresentation reader also takes `draw:decorative` (ODF 1.4) in the style, and either
 attribute on the shape itself.
 
+## Slide title and reading order
+
+Assistive technologies also need to know which text is the title of a slide and in what order to
+read the rest. A text box that only looks like a title is not one: give the rich text shape a
+title placeholder.
+
+``` php
+<?php
+
+use PhpOffice\PhpPresentation\Shape\Placeholder;
+
+$title = $slide->createRichTextShape()
+		->setHeight(60)
+		->setWidth(800)
+		->setOffsetX(40)
+		->setOffsetY(20);
+$title->setPlaceHolder(new Placeholder(Placeholder::PH_TYPE_TITLE));
+$title->createTextRun('Budget 2026');
+```
+
+It is written as `<p:ph type="title"/>` in PowerPoint2007 files and as a frame of
+`presentation:class="title"` in ODPresentation files. LibreOffice Impress exports such a shape as
+a heading when it writes a tagged PDF from either file, and the same text without the placeholder
+as a plain paragraph.
+
+The reading order is the [stacking order](#stacking-order): LibreOffice Impress writes the shapes
+to a tagged PDF in the order they were added to the slide, whatever their position on it. Add the
+title first, then the rest in the order it should be read, or put a shape in its place afterwards
+with `moveShape()`.
+
+``` php
+<?php
+$slide->moveShape($title, 0);   // the title is read first
+```
+
 ## Line
 
 To create a line, use `createLineShape` method of slide.
