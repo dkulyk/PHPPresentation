@@ -40,6 +40,7 @@ use PhpOffice\PhpPresentation\Shape\Drawing\Gd;
 use PhpOffice\PhpPresentation\Shape\Group;
 use PhpOffice\PhpPresentation\Shape\Hyperlink;
 use PhpOffice\PhpPresentation\Shape\Line;
+use PhpOffice\PhpPresentation\Shape\Media;
 use PhpOffice\PhpPresentation\Shape\Placeholder;
 use PhpOffice\PhpPresentation\Shape\RichText;
 use PhpOffice\PhpPresentation\Shape\RichText\Numbering;
@@ -1135,7 +1136,8 @@ class PowerPoint2007 implements ReaderInterface
      */
     protected function loadShapeHyperlink(XMLReader $document, DOMElement $node): ?Hyperlink
     {
-        $oElement = $document->getElement('a:hlinkClick', $node);
+        // `ppaction://media` plays the video or the sound the shape is, and links to nothing
+        $oElement = $document->getElement('a:hlinkClick[not(@action="ppaction://media")]', $node);
 
         return $oElement instanceof DOMElement ? $this->loadHyperlink($document, $oElement, new Hyperlink()) : null;
     }
@@ -1247,14 +1249,62 @@ class PowerPoint2007 implements ReaderInterface
         }
     }
 
+    /**
+     * Read the video or the sound a picture stands for, or null when it is a picture and no more.
+     *
+     * The part is `p14:media r:embed` for what PowerPoint 2010 and later embed, and what
+     * `a:videoFile` or `a:audioFile` links to otherwise. It is not copied: the shape points at it
+     * inside the file being read, so that file has to be there when the presentation is written.
+     * A target that is not a part of the package, a file beside the presentation or an address,
+     * cannot be pointed at that way, and the shape stays the picture it was.
+     */
+    protected function loadShapeMedia(XMLReader $document, DOMElement $node, string $fileRels): ?Media
+    {
+        $document->registerNamespace('p14', 'http://schemas.microsoft.com/office/powerpoint/2010/main');
+        $oNvPr = $document->getElement('p:nvPicPr/p:nvPr', $node);
+        if (!$oNvPr instanceof DOMElement) {
+            return null;
+        }
+        $relIds = [];
+        $oElement = $document->getElement('p:extLst/p:ext/p14:media', $oNvPr);
+        if ($oElement instanceof DOMElement) {
+            $relIds[] = $oElement->getAttribute('r:embed');
+        }
+        $oElement = $document->getElement('a:videoFile|a:audioFile', $oNvPr);
+        if ($oElement instanceof DOMElement) {
+            $relIds[] = $oElement->getAttribute('r:link');
+        }
+        foreach ($relIds as $relId) {
+            // a relationship of another type is not a video or a sound, whatever names it
+            if (!preg_match('#/(media|video|audio)$#', $this->arrayRels[$fileRels][$relId]['Type'] ?? '')) {
+                continue;
+            }
+            $part = $this->resolve($fileRels, $this->arrayRels[$fileRels][$relId]['Target']);
+            // a path is cut at its first `#` when it is read, so there is no pointing into a file
+            // whose own name has one
+            if (false === $this->oZip->locateName($part) || false !== strpos($this->oZip->filename, '#')) {
+                continue;
+            }
+            $oShape = new Media();
+            // the archive knows its own name in full, whatever path it was opened by
+            $oShape->setPath('zip://' . $this->oZip->filename . '#' . $part, false);
+
+            return $oShape;
+        }
+
+        return null;
+    }
+
     protected function loadShapeDrawing(XMLReader $document, DOMElement $node, AbstractSlide $oSlide, ?ShapeContainerInterface $oContainer = null): void
     {
         $oContainer = $oContainer ?? $oSlide;
         // Variables
         $fileRels = $oSlide->getRelsIndex();
+        $oShape = $this->loadShapeMedia($document, $node, $fileRels);
 
+        // the picture of a video or a sound is only its poster frame, which is not read
         $imageFile = '';
-        $oElement = $document->getElement('p:blipFill/a:blip', $node);
+        $oElement = $oShape instanceof Media ? null : $document->getElement('p:blipFill/a:blip', $node);
         if ($oElement instanceof DOMElement) {
             if ($oElement->hasAttribute('r:embed') && isset($this->arrayRels[$fileRels][$oElement->getAttribute('r:embed')]['Target'])) {
                 $pathImage = $this->resolve($fileRels, $this->arrayRels[$fileRels][$oElement->getAttribute('r:embed')]['Target']);
@@ -1263,15 +1313,17 @@ class PowerPoint2007 implements ReaderInterface
         }
 
         // Core
-        $document->registerNamespace('asvg', 'http://schemas.microsoft.com/office/drawing/2016/SVG/main');
         $mimeType = null;
-        if ($document->getElement('p:blipFill/a:blip/a:extLst/a:ext/asvg:svgBlip', $node)) {
-            $mimeType = 'image/svg+xml';
-        } elseif (!empty($imageFile) && !getimagesizefromstring($imageFile)) {
-            // a metafile is no image GD can draw, and is kept as it is
-            $mimeType = Metafile::getMimeType($imageFile);
+        if (null === $oShape) {
+            $document->registerNamespace('asvg', 'http://schemas.microsoft.com/office/drawing/2016/SVG/main');
+            if ($document->getElement('p:blipFill/a:blip/a:extLst/a:ext/asvg:svgBlip', $node)) {
+                $mimeType = 'image/svg+xml';
+            } elseif (!empty($imageFile) && !getimagesizefromstring($imageFile)) {
+                // a metafile is no image GD can draw, and is kept as it is
+                $mimeType = Metafile::getMimeType($imageFile);
+            }
+            $oShape = null !== $mimeType ? new Base64() : new Gd();
         }
-        $oShape = null !== $mimeType ? new Base64() : new Gd();
         $oShape->getShadow()->setVisible(false);
 
         $oElement = $document->getElement('p:nvPicPr/p:cNvPr', $node);
