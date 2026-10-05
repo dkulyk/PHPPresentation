@@ -35,6 +35,7 @@ use PhpOffice\PhpPresentation\PhpPresentation;
 use PhpOffice\PhpPresentation\PresentationProperties;
 use PhpOffice\PhpPresentation\Shape\AutoShape;
 use PhpOffice\PhpPresentation\Shape\Chart;
+use PhpOffice\PhpPresentation\Shape\Comment;
 use PhpOffice\PhpPresentation\Shape\Drawing\Base64;
 use PhpOffice\PhpPresentation\Shape\Drawing\Gd;
 use PhpOffice\PhpPresentation\Shape\Group;
@@ -97,6 +98,8 @@ class PowerPoint2007 implements ReaderInterface
     private const REL_NOTES_SLIDE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide';
     private const REL_THEME = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme';
     private const REL_NOTES_MASTER = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster';
+    private const REL_COMMENTS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments';
+    private const REL_COMMENT_AUTHORS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/commentAuthors';
 
     /**
      * The nine plots the Writer knows, by the element each is written as.
@@ -152,6 +155,13 @@ class PowerPoint2007 implements ReaderInterface
      * @var SlideLayout[]
      */
     protected $arraySlideLayouts = [];
+
+    /**
+     * The authors of the comments, by the id a comment names its author with.
+     *
+     * @var array<string, Comment\Author>
+     */
+    protected $arrayCommentAuthors = [];
 
     /**
      * @var string
@@ -622,6 +632,7 @@ class PowerPoint2007 implements ReaderInterface
             $fileRels = $this->mainRels;
             // Load the Masterslides
             $this->loadMasterSlides($xmlReader, $fileRels);
+            $this->loadCommentAuthors();
             // Continue with loading the slides
             foreach ($xmlReader->getElements('/p:presentation/p:sldIdLst/p:sldId') as $oElement) {
                 if (!($oElement instanceof DOMElement)) {
@@ -638,6 +649,9 @@ class PowerPoint2007 implements ReaderInterface
                         foreach ($this->arrayRels[$slideRels] as $rel) {
                             if (self::REL_NOTES_SLIDE == $rel['Type']) {
                                 $this->loadSlideNote($this->resolve($slideRels, $rel['Target']), $this->oPhpPresentation->getActiveSlide());
+                            }
+                            if (self::REL_COMMENTS == $rel['Type']) {
+                                $this->loadSlideComments($this->resolve($slideRels, $rel['Target']), $this->oPhpPresentation->getActiveSlide());
                             }
                         }
                     }
@@ -1105,6 +1119,76 @@ class PowerPoint2007 implements ReaderInterface
 
             $arrayElements = $xmlReader->getElements('/p:notes/p:cSld/p:spTree/*');
             $this->loadSlideShapes($xmlReader, $oNote, $arrayElements, $xmlReader);
+        }
+    }
+
+    /**
+     * Read the authors of the comments, which the presentation keeps in one part for all slides.
+     */
+    protected function loadCommentAuthors(): void
+    {
+        $this->arrayCommentAuthors = [];
+        $sPart = $this->getFromRel($this->mainRels, self::REL_COMMENT_AUTHORS);
+        $xmlReader = new XMLReader();
+        // @phpstan-ignore-next-line
+        if (null === $sPart || !$xmlReader->getDomFromString($sPart)) {
+            return;
+        }
+        $oAuthors = [];
+        foreach ($xmlReader->getElements('/p:cmAuthorLst/p:cmAuthor') as $oElement) {
+            if (!($oElement instanceof DOMElement)) {
+                continue;
+            }
+            $oAuthor = new Comment\Author();
+            $oAuthor
+                ->setIndex((int) $oElement->getAttribute('id'))
+                ->setName($oElement->getAttribute('name'))
+                ->setInitials($oElement->getAttribute('initials'));
+            // Two authors of one name and initials are one author to the Writer, so they are one here
+            $oAuthors[$oAuthor->getHashCode()] = $oAuthors[$oAuthor->getHashCode()] ?? $oAuthor;
+            $this->arrayCommentAuthors[$oElement->getAttribute('id')] = $oAuthors[$oAuthor->getHashCode()];
+        }
+    }
+
+    /**
+     * Read the comments of a slide.
+     */
+    protected function loadSlideComments(string $partName, Slide $oSlide): void
+    {
+        $sPart = $this->getFromName($partName);
+        $xmlReader = new XMLReader();
+        // @phpstan-ignore-next-line
+        if (false === $sPart || !$xmlReader->getDomFromString($sPart)) {
+            return;
+        }
+        foreach ($xmlReader->getElements('/p:cmLst/p:cm') as $oElement) {
+            if (!($oElement instanceof DOMElement)) {
+                continue;
+            }
+            $oComment = new Comment();
+            $oComment->setText((string) $xmlReader->getValue('p:text', $oElement));
+
+            // A comment that names an author the presentation does not list has none
+            $oAuthor = $this->arrayCommentAuthors[$oElement->getAttribute('authorId')] ?? null;
+            if (null !== $oAuthor) {
+                $oComment->setAuthor($oAuthor);
+            }
+
+            // The date is optional, and a comment without one keeps the date it was read at
+            $date = strtotime($oElement->getAttribute('dt'));
+            if (false !== $date) {
+                $oComment->setDate($date);
+            }
+
+            // The position is in eighths of a point
+            $oElementPos = $xmlReader->getElement('p:pos', $oElement);
+            if ($oElementPos instanceof DOMElement) {
+                $oComment
+                    ->setOffsetX((int) round(CommonDrawing::pointsToPixels((int) $oElementPos->getAttribute('x') / 8)))
+                    ->setOffsetY((int) round(CommonDrawing::pointsToPixels((int) $oElementPos->getAttribute('y') / 8)));
+            }
+
+            $oSlide->addShape($oComment);
         }
     }
 
