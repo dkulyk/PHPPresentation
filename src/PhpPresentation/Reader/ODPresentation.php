@@ -32,6 +32,7 @@ use PhpOffice\PhpPresentation\PhpPresentation;
 use PhpOffice\PhpPresentation\PresentationProperties;
 use PhpOffice\PhpPresentation\Shape\AutoShape;
 use PhpOffice\PhpPresentation\Shape\Chart;
+use PhpOffice\PhpPresentation\Shape\Comment;
 use PhpOffice\PhpPresentation\Shape\Drawing\Base64;
 use PhpOffice\PhpPresentation\Shape\Drawing\Gd;
 use PhpOffice\PhpPresentation\Shape\Group;
@@ -354,6 +355,14 @@ class ODPresentation implements ReaderInterface
     protected $arraySlideNumbers = [];
 
     /**
+     * The authors of the comments read so far, by hash code, so that the comments of one author
+     * share one object.
+     *
+     * @var array<string, Comment\Author>
+     */
+    protected $arrayCommentAuthors = [];
+
+    /**
      * @var XMLReader
      */
     protected $oXMLReader;
@@ -524,6 +533,7 @@ class ODPresentation implements ReaderInterface
         // A link to another slide addresses it by name and can point forwards, so the names are
         // collected before any slide is read
         $this->arraySlideNumbers = [];
+        $this->arrayCommentAuthors = [];
         $slideNumber = 0;
         foreach ($this->oXMLReader->getElements('/office:document-content/office:body/office:presentation/draw:page') as $oElement) {
             if ($oElement instanceof DOMElement && 'draw:page' == $oElement->nodeName) {
@@ -1200,8 +1210,99 @@ class ODPresentation implements ReaderInterface
                     $this->loadShapeGroup($oNode, $container);
 
                     break;
+                case 'officeooo:annotation':
+                case 'office:annotation':
+                    // LibreOffice writes the first and reads both
+                    $this->loadShapeComment($oNode, $container);
+
+                    break;
             }
         }
+    }
+
+    /**
+     * Read a comment: its position, author, date and text, a paragraph a line.
+     */
+    protected function loadShapeComment(DOMElement $oNodeAnnotation, ShapeContainerInterface $container): void
+    {
+        $oComment = new Comment();
+        $this->loadShapeOffset($oComment, $oNodeAnnotation);
+
+        $oAuthor = new Comment\Author();
+        foreach ($oNodeAnnotation->childNodes as $oNode) {
+            switch ($oNode->nodeName) {
+                case 'dc:creator':
+                    $oAuthor->setName($oNode->textContent);
+
+                    break;
+                case 'meta:creator-initials':
+                    // ODF 1.3; the other two are what LibreOffice wrote before it
+                case 'loext:sender-initials':
+                case 'text:sender-initials':
+                    $oAuthor->setInitials($oNode->textContent);
+
+                    break;
+                case 'dc:date':
+                    $date = strtotime($oNode->textContent);
+                    if (false !== $date) {
+                        $oComment->setDate($date);
+                    }
+
+                    break;
+            }
+        }
+        if (null !== $oAuthor->getName() || null !== $oAuthor->getInitials()) {
+            $hashCode = $oAuthor->getHashCode();
+            if (!isset($this->arrayCommentAuthors[$hashCode])) {
+                $this->arrayCommentAuthors[$hashCode] = $oAuthor;
+            }
+            $oComment->setAuthor($this->arrayCommentAuthors[$hashCode]);
+        }
+
+        $text = [];
+        foreach ($this->oXMLReader->getElements('.//text:p', $oNodeAnnotation) as $oNodeParagraph) {
+            if ($oNodeParagraph instanceof DOMElement) {
+                $text[] = $this->loadCommentText($oNodeParagraph);
+            }
+        }
+        $oComment->setText(implode("\n", $text));
+
+        $container->addShape($oComment);
+    }
+
+    /**
+     * The text of a paragraph of a comment, with the spaces, the tabs and the line breaks ODF
+     * writes as elements.
+     */
+    private function loadCommentText(DOMElement $oNodeParent): string
+    {
+        $text = '';
+        foreach ($oNodeParent->childNodes as $oNode) {
+            if (!$oNode instanceof DOMElement) {
+                $text .= in_array($oNode->nodeType, [XML_TEXT_NODE, XML_CDATA_SECTION_NODE], true) ? $oNode->nodeValue : '';
+
+                continue;
+            }
+            switch ($oNode->nodeName) {
+                case 'text:s':
+                    $text .= str_repeat(' ', max(1, (int) $oNode->getAttribute('text:c')));
+
+                    break;
+                case 'text:tab':
+                    $text .= "\t";
+
+                    break;
+                case 'text:line-break':
+                    $text .= "\n";
+
+                    break;
+                default:
+                    // text:span, text:a
+                    $text .= $this->loadCommentText($oNode);
+            }
+        }
+
+        return $text;
     }
 
     /**

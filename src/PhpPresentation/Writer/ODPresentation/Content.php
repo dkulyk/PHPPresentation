@@ -935,9 +935,29 @@ class Content extends AbstractDecoratorWriter
 
         if ($oShape->getAuthor() instanceof Comment\Author) {
             $objWriter->writeElement('dc:creator', $oShape->getAuthor()->getName());
+            if ('' !== (string) $oShape->getAuthor()->getInitials()) {
+                // What LibreOffice writes in ODF 1.2; meta:creator-initials came with ODF 1.3
+                $objWriter->writeElement('loext:sender-initials', $oShape->getAuthor()->getInitials());
+            }
         }
         $objWriter->writeElement('dc:date', date('Y-m-d\TH:i:s', $oShape->getDate()));
-        $objWriter->writeElement('text:p', $oShape->getText());
+        // LibreOffice reads a line break in a paragraph as a space, so a line is a paragraph
+        foreach (preg_split('/\r\n?|\n/', (string) $oShape->getText()) ?: [] as $line) {
+            $objWriter->startElement('text:p');
+            // and drops a tab, a leading space and every space after a space unless they are elements
+            foreach (preg_split('/(\t|^ +|(?<= ) +)/', $line, -1, PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY) ?: [] as $part) {
+                if ("\t" === $part) {
+                    $objWriter->writeElement('text:tab');
+                } elseif ('' === trim($part, ' ')) {
+                    $objWriter->startElement('text:s');
+                    $objWriter->writeAttribute('text:c', (string) strlen($part));
+                    $objWriter->endElement();
+                } else {
+                    $objWriter->text($part);
+                }
+            }
+            $objWriter->endElement();
+        }
 
         // ## officeooo:annotation
         $objWriter->endElement();

@@ -56,8 +56,15 @@ use PhpOffice\PhpPresentation\Shape\Comment\Author;
 
 $author = new Author();
 $author->setName('Name of the author');
-$author->setInitals('Nota');
+$author->setInitials('Nota');
 $comment = new Comment();
 $comment->setAuthor($author);
 $slide->addShape($comment);
 ```
+
+## Reading
+
+The ODPresentation Reader reads the comments of a slide, as LibreOffice Impress writes them:
+the position, the date, the text with a line for each paragraph, and the name and the
+initials of the author. Comments whose authors have the same name and initials share one
+`Author` object.
