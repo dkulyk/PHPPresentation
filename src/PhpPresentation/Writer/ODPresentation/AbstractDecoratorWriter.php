@@ -110,6 +110,30 @@ abstract class AbstractDecoratorWriter extends \PhpOffice\PhpPresentation\Writer
     ];
 
     /**
+     * Write a language the way LibreOffice splits one: a language and a country when that is all
+     * the tag says, and the whole BCP 47 tag in `style:rfc-language-tag` when it says more, beside
+     * whichever ISO parts it still breaks into.
+     *
+     * @param string $suffix `''` for the Latin family, `-asian` or `-complex` for the other two
+     */
+    protected function writeLanguage(XMLWriter $objWriter, string $tag, string $suffix): void
+    {
+        $prefix = '' === $suffix ? 'fo:' : 'style:';
+        // a language, then a script and a country if the tag has them, then whatever it says past those
+        $matched = preg_match('/^([A-Za-z]{2,3})(?:-([A-Za-z]{4}))?(?:-([A-Za-z]{2}))?(-.+)?$/', $tag, $matches);
+        $script = $matches[2] ?? '';
+        $country = $matches[3] ?? '';
+        $rest = $matches[4] ?? '';
+        if ($matched) {
+            $objWriter->writeAttribute($prefix . 'language' . $suffix, strtolower($matches[1]));
+            $objWriter->writeAttributeIf('' !== $script, $prefix . 'script' . $suffix, ucfirst(strtolower($script)));
+            $objWriter->writeAttributeIf('' !== $country, $prefix . 'country' . $suffix, strtoupper($country));
+        }
+        // LibreOffice keeps the whole tag only where a language and a country do not say all of it
+        $objWriter->writeAttributeIf(!$matched || '' !== $script || '' !== $rest, 'style:rfc-language-tag' . $suffix, $tag);
+    }
+
+    /**
      * The underline and the strikethrough of a font, written into the `style:text-properties` the
      * caller has open. Both are one attribute family for the whole run, unlike the family, the
      * size and the weight, which ODF spells once per script.

@@ -1633,6 +1633,33 @@ class ObjectsChartTest extends PhpPresentationTestCase
         $this->assertIsSchemaOpenDocumentValid('1.2');
     }
 
+    public function testLanguageOfEveryChartStyle(): void
+    {
+        $this->oPresentation->getDocumentProperties()->setLanguage('sr-Latn-RS');
+        $oShape = $this->oPresentation->getActiveSlide()->createChartShape();
+        $oSeries = new Series('Series', $this->seriesData);
+        $oBar = new Bar();
+        $oBar->addSeries($oSeries);
+        $oShape->getPlotArea()->setType($oBar);
+        $oShape->getPlotArea()->getAxisX()->setTitle('Axis');
+
+        foreach ([
+            $this->getAxisStyleXPath('x'),
+            $this->getAxisTitleStyleXPath('x'),
+            $this->getLegendStyleXPath(),
+            $this->getSeriesStyleXPath(),
+            $this->getTitleStyleXPath(),
+        ] as $styleXPath) {
+            $element = $styleXPath . '/style:text-properties';
+            $this->assertZipXmlAttributeEquals('Object 1/content.xml', $element, 'fo:language', 'sr');
+            $this->assertZipXmlAttributeEquals('Object 1/content.xml', $element, 'fo:script', 'Latn');
+            $this->assertZipXmlAttributeEquals('Object 1/content.xml', $element, 'fo:country', 'RS');
+            $this->assertZipXmlAttributeEquals('Object 1/content.xml', $element, 'style:rfc-language-tag', 'sr-Latn-RS');
+        }
+
+        $this->assertIsSchemaOpenDocumentValid('1.2');
+    }
+
     public function testFontStateLeftAloneIsNotWritten(): void
     {
         $oShape = $this->oPresentation->getActiveSlide()->createChartShape();
