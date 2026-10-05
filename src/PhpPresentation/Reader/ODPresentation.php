@@ -2142,13 +2142,21 @@ class ODPresentation implements ReaderInterface
             ? $oNodeRow->getAttribute('table:default-cell-style-name')
             : '';
 
+        // A cell that a span covers is still there, as `table:covered-table-cell`, and holds its
+        // place in the row
         $cellIndex = 0;
-        foreach ($this->oXMLReader->getElements('table:table-cell', $oNodeRow) as $oNodeCell) {
+        foreach ($this->oXMLReader->getElements('table:table-cell|table:covered-table-cell', $oNodeRow) as $oNodeCell) {
             if (!$oNodeCell instanceof DOMElement || !$oRow->hasCell($cellIndex)) {
                 continue;
             }
-            $this->loadTableCell($oRow->getCell($cellIndex), $oNodeCell, $defaultCellStyle);
-            ++$cellIndex;
+            $oCell = $oRow->getCell($cellIndex);
+            $this->loadTableCell($oCell, $oNodeCell, $defaultCellStyle);
+            if ('table-cell' === $oNodeCell->localName) {
+                $oCell->setColSpan((int) $oNodeCell->getAttribute('table:number-columns-spanned'));
+                $oCell->setRowSpan((int) $oNodeCell->getAttribute('table:number-rows-spanned'));
+            }
+            // LibreOffice reads the first of a run of repeated cells and steps over the others
+            $cellIndex += max(1, (int) $oNodeCell->getAttribute('table:number-columns-repeated'));
         }
     }
 
@@ -2166,18 +2174,20 @@ class ODPresentation implements ReaderInterface
         }
 
         // A cell holds its text in `text:p`, which is what this Writer and LibreOffice both put
-        // there
+        // there. An empty cell, which LibreOffice writes with no `text:p`, keeps the paragraph it
+        // was created with
+        $oNodeParagraphs = $this->oXMLReader->getElements('text:p', $oNodeCell);
+        if (0 === $oNodeParagraphs->length) {
+            return;
+        }
         $oCell->setParagraphs([]);
-        foreach ($this->oXMLReader->getElements('text:p', $oNodeCell) as $oNodeParagraph) {
+        foreach ($oNodeParagraphs as $oNodeParagraph) {
             if ($oNodeParagraph instanceof DOMElement) {
                 $this->levelParagraph = 0;
                 $this->readParagraph($oCell, $oNodeParagraph);
             }
         }
-
-        if (count($oCell->getParagraphs()) > 0) {
-            $oCell->setActiveParagraph(0);
-        }
+        $oCell->setActiveParagraph(0);
     }
 
     /**
