@@ -1941,6 +1941,105 @@ class ODPresentationTest extends TestCase
         }
     }
 
+    public function testTableSpansSurviveTheRoundTrip(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oTable = $oPhpPresentation->getActiveSlide()->createTableShape(4);
+        for ($row = 0; $row < 3; ++$row) {
+            $oRow = $oTable->createRow();
+            for ($cell = 0; $cell < 4; ++$cell) {
+                $oRow->getCell($cell)->createTextRun('r' . $row . 'c' . $cell);
+            }
+        }
+        $oTable->getRow(0)->getCell(0)->setColSpan(2);
+        $oTable->getRow(1)->getCell(0)->setRowSpan(2);
+        $oTable->getRow(1)->getCell(2)->setColSpan(2)->setRowSpan(2);
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new ODPresentationWriter($oPhpPresentation))->save($file);
+        $oPhpPresentationRead = (new ODPresentation())->load($file);
+        unlink($file);
+
+        $arrayShape = array_values((array) $oPhpPresentationRead->getActiveSlide()->getShapeCollection());
+        $oTableRead = $arrayShape[0];
+        self::assertInstanceOf(Table::class, $oTableRead);
+        // A covered cell holds its place, so the cells after it stay in their columns
+        self::assertEquals([
+            ['r0c0 2x0', ' 0x0', 'r0c2 0x0', 'r0c3 0x0'],
+            ['r1c0 0x2', 'r1c1 0x0', 'r1c2 2x2', ' 0x0'],
+            [' 0x0', 'r2c1 0x0', ' 0x0', ' 0x0'],
+        ], $this->getTableSpans($oTableRead));
+    }
+
+    public function testTableSpansWrittenByLibreOffice(): void
+    {
+        // LibreOffice 26.8 keeps the text of a covered cell, and writes a cell that has no text
+        // with no `text:p`
+        $file = PHPPRESENTATION_TESTS_BASE_DIR . '/resources/files/ODP_Table_Spans.odp';
+        $oPhpPresentation = (new ODPresentation())->load($file);
+
+        $arrayShape = array_values((array) $oPhpPresentation->getActiveSlide()->getShapeCollection());
+        $oTable = $arrayShape[0];
+        self::assertInstanceOf(Table::class, $oTable);
+        self::assertEquals([
+            ['r0c0 2x0', ' 0x0', 'r0c2 0x0', 'r0c3 0x0'],
+            ['r1c0 0x2', 'r1c1 0x0', 'r1c2 2x2', ' 0x0'],
+            [' 0x0', 'r2c1 0x0', ' 0x0', 'r2c3 0x0'],
+            ['r3c0 0x0', 'r3c1 0x0', 'r3c2 0x0', 'r3c3 0x0'],
+        ], $this->getTableSpans($oTable));
+        // A cell with no text keeps a paragraph, which the writers count on
+        self::assertCount(1, $oTable->getRow(0)->getCell(1)->getParagraphs());
+    }
+
+    public function testTableRepeatedCells(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oTable = $oPhpPresentation->getActiveSlide()->createTableShape(4);
+        $oTable->createRow()->getCell(0)->setColSpan(3);
+        $oTable->getRow(0)->getCell(3)->createTextRun('last');
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new ODPresentationWriter($oPhpPresentation))->save($file);
+        // The two covered cells as one repeated cell, which ODF allows
+        $oZip = new ZipArchive();
+        $oZip->open($file);
+        $content = (string) $oZip->getFromName('content.xml');
+        $repeated = str_replace(
+            '<table:covered-table-cell/><table:covered-table-cell/>',
+            '<table:covered-table-cell table:number-columns-repeated="2"/>',
+            $content
+        );
+        self::assertNotEquals($content, $repeated);
+        $oZip->addFromString('content.xml', $repeated);
+        $oZip->close();
+        $oPhpPresentationRead = (new ODPresentation())->load($file);
+        unlink($file);
+
+        $arrayShape = array_values((array) $oPhpPresentationRead->getActiveSlide()->getShapeCollection());
+        $oTableRead = $arrayShape[0];
+        self::assertInstanceOf(Table::class, $oTableRead);
+        self::assertEquals([[' 3x0', ' 0x0', ' 0x0', 'last 0x0']], $this->getTableSpans($oTableRead));
+    }
+
+    /**
+     * The text and the spans of every cell of a table, row by row.
+     *
+     * @return array<int, array<int, string>>
+     */
+    private function getTableSpans(Table $oTable): array
+    {
+        $spans = [];
+        foreach ($oTable->getRows() as $oRow) {
+            $cells = [];
+            foreach ($oRow->getCells() as $oCell) {
+                $cells[] = $oCell->getPlainText() . ' ' . $oCell->getColSpan() . 'x' . $oCell->getRowSpan();
+            }
+            $spans[] = $cells;
+        }
+
+        return $spans;
+    }
+
     public function testFieldSurvivesTheRoundTrip(): void
     {
         $oPhpPresentation = new PhpPresentation();
