@@ -82,6 +82,37 @@ class ContentTest extends PhpPresentationTestCase
         $this->assertIsSchemaOpenDocumentNotValid('1.2');
     }
 
+    public function testCommentInitialsAndLines(): void
+    {
+        $oComment = new Comment();
+        $oComment->setAuthor((new Comment\Author())->setName('Name')->setInitials('NM'));
+        $oComment->setText("First line\nSecond line");
+        $this->oPresentation->getActiveSlide()->addShape($oComment);
+
+        // LibreOffice reads the initials from here, and a paragraph as a line
+        $element = '/office:document-content/office:body/office:presentation/draw:page/officeooo:annotation';
+        $this->assertZipXmlElementEquals('content.xml', $element . '/loext:sender-initials', 'NM');
+        $this->assertZipXmlElementCount('content.xml', $element . '/text:p', 2);
+        $this->assertZipXmlElementEquals('content.xml', $element . '/text:p[1]', 'First line');
+        $this->assertZipXmlElementEquals('content.xml', $element . '/text:p[2]', 'Second line');
+    }
+
+    public function testCommentWhitespace(): void
+    {
+        $oComment = new Comment();
+        $oComment->setText("two   spaces\r\n lead\ttab");
+        $this->oPresentation->getActiveSlide()->addShape($oComment);
+
+        // LibreOffice keeps a space after a space, a leading space and a tab only as elements
+        $element = '/office:document-content/office:body/office:presentation/draw:page/officeooo:annotation/text:p';
+        $this->assertZipXmlElementCount('content.xml', $element, 2);
+        $this->assertZipXmlElementEquals('content.xml', $element . '[1]', 'two spaces');
+        $this->assertZipXmlAttributeEquals('content.xml', $element . '[1]/text:s', 'text:c', '2');
+        $this->assertZipXmlElementEquals('content.xml', $element . '[2]', 'leadtab');
+        $this->assertZipXmlAttributeEquals('content.xml', $element . '[2]/text:s', 'text:c', '1');
+        $this->assertZipXmlElementExists('content.xml', $element . '[2]/text:tab');
+    }
+
     public function testCommentWithoutAuthor(): void
     {
         $oComment = new Comment();
@@ -89,7 +120,8 @@ class ContentTest extends PhpPresentationTestCase
 
         $element = '/office:document-content/office:body/office:presentation/draw:page/officeooo:annotation';
         $this->assertZipXmlElementExists('content.xml', $element);
-        $this->assertZipXmlAttributeNotExists('content.xml', $element, 'dc:creator');
+        $this->assertZipXmlElementNotExists('content.xml', $element . '/dc:creator');
+        $this->assertZipXmlElementNotExists('content.xml', $element . '/loext:sender-initials');
         $this->assertIsSchemaOpenDocumentNotValid('1.2');
     }
 
