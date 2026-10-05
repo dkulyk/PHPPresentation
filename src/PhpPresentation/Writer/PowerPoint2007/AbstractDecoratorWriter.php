@@ -30,6 +30,20 @@ use PhpOffice\PhpPresentation\Style\Outline;
 abstract class AbstractDecoratorWriter extends \PhpOffice\PhpPresentation\Writer\AbstractDecoratorWriter
 {
     /**
+     * A notes slide needs a notes master, which is written once a slide has a note.
+     */
+    protected function hasNotes(): bool
+    {
+        foreach ($this->oPresentation->getAllSlides() as $oSlide) {
+            if (count($oSlide->getNote()->getShapeCollection()) > 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Write relationship.
      *
      * @param XMLWriter $objWriter XML Writer
