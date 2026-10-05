@@ -1089,22 +1089,41 @@ class Content extends AbstractDecoratorWriter
                 $objWriter->startElement('table:table-column');
                 $objWriter->endElement();
             }
-            foreach ($arrayRows as $shapeRow) {
+            // The cells a span covers, right of and below the cell that starts it. A covered cell
+            // starts no span of its own.
+            /** @var array<int, array<int, true>> $covered */
+            $covered = [];
+            foreach ($arrayRows as $row => $shapeRow) {
+                foreach ($shapeRow->getCells() as $cell => $shapeCell) {
+                    if (isset($covered[$row][$cell])) {
+                        continue;
+                    }
+                    // a span is 0 when it was never set
+                    for ($i = 0; $i < max(1, $shapeCell->getRowSpan()); ++$i) {
+                        for ($j = 0; $j < max(1, $shapeCell->getColSpan()); ++$j) {
+                            if ($i > 0 || $j > 0) {
+                                $covered[$row + $i][$cell + $j] = true;
+                            }
+                        }
+                    }
+                }
+            }
+            foreach ($arrayRows as $row => $shapeRow) {
                 // table:table-row
                 $objWriter->startElement('table:table-row');
                 $objWriter->writeAttribute('table:style-name', $this->getAutomaticStyleName($shapeRow));
                 //@todo getFill
 
-                $numColspan = 0;
-                foreach ($shapeRow->getCells() as $shapeCell) {
-                    if (0 == $numColspan) {
+                foreach ($shapeRow->getCells() as $cell => $shapeCell) {
+                    if (!isset($covered[$row][$cell])) {
                         // table:table-cell
                         $objWriter->startElement('table:table-cell');
                         $objWriter->writeAttribute('table:style-name', $this->getAutomaticStyleName($shapeCell));
-                        if ($shapeCell->getColspan() > 1) {
-                            $objWriter->writeAttribute('table:number-columns-spanned', $shapeCell->getColspan());
-                            $numColspan = $shapeCell->getColspan() - 1;
-                        }
+                        // LibreOffice drops a span that reaches past the table, so it stops at the edge
+                        $colSpan = min($shapeCell->getColSpan(), count($shapeRow->getCells()) - $cell);
+                        $rowSpan = min($shapeCell->getRowSpan(), count($arrayRows) - $row);
+                        $objWriter->writeAttributeIf($colSpan > 1, 'table:number-columns-spanned', $colSpan);
+                        $objWriter->writeAttributeIf($rowSpan > 1, 'table:number-rows-spanned', $rowSpan);
 
                         // text:p
                         $objWriter->startElement('text:p');
@@ -1148,7 +1167,6 @@ class Content extends AbstractDecoratorWriter
                     } else {
                         // table:covered-table-cell
                         $objWriter->writeElement('table:covered-table-cell');
-                        --$numColspan;
                     }
                 }
                 // > table:table-row
