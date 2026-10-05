@@ -12,6 +12,11 @@ The ODPresentation Writer writes an AutoShape the way LibreOffice writes an OOXM
 names no preset shapes. The ODPresentation Reader reads such a shape back, and a custom shape
 LibreOffice draws with a geometry of its own as the preset its export to PowerPoint names.
 
+LibreOffice writes the text box of a PowerPoint file as a custom shape too, a rectangle. The
+ODPresentation Reader reads a rectangle that holds text as a `RichText` when its own style sets
+both its fill and its line to none, so that its runs, their links and their languages are kept. Any
+other rectangle is read as an `AutoShape`, with its text as a plain string.
+
 To create a geometric form, create an object `AutoShape` and add it to slide.
 
 ``` php

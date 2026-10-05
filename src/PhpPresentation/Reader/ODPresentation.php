@@ -1187,7 +1187,11 @@ class ODPresentation implements ReaderInterface
 
                     break;
                 case 'draw:custom-shape':
-                    $this->loadShapeAutoShape($oNode, $container);
+                    if ($this->isTextBox($oNode)) {
+                        $this->loadShapeRichText($oNode, $container);
+                    } else {
+                        $this->loadShapeAutoShape($oNode, $container);
+                    }
 
                     break;
                 case 'draw:line':
@@ -1791,17 +1795,40 @@ class ODPresentation implements ReaderInterface
     }
 
     /**
+     * The OOXML preset a custom shape is drawn from, or an empty string where its geometry names
+     * none.
+     */
+    protected function loadCustomShapeType(DOMElement $oNodeShape): string
+    {
+        $oNodeGeometry = $this->oXMLReader->getElement('draw:enhanced-geometry', $oNodeShape);
+        $type = $oNodeGeometry instanceof DOMElement ? $oNodeGeometry->getAttribute('draw:type') : '';
+
+        return 0 === strpos($type, 'ooxml-') ? substr($type, strlen('ooxml-')) : (self::CUSTOM_SHAPE_TYPES[$type] ?? '');
+    }
+
+    /**
+     * Is a custom shape a text box? LibreOffice writes the text box of an OOXML file as a custom
+     * shape, and nothing in the file says which it was. A rectangle that holds text and whose style
+     * says it has neither a fill nor a line shows nothing but that text, so it is read as one.
+     */
+    protected function isTextBox(DOMElement $oNodeShape): bool
+    {
+        $style = $this->arrayStyles[$oNodeShape->getAttribute('draw:style-name')] ?? null;
+
+        return AutoShape::TYPE_RECTANGLE === $this->loadCustomShapeType($oNodeShape)
+            && null !== $style
+            && null !== $style['fill'] && Fill::FILL_NONE === $style['fill']->getFillType()
+            && null !== $style['border'] && Border::LINE_NONE === $style['border']->getLineStyle()
+            && $this->oXMLReader->elementExists('(text:p|text:list)[normalize-space()]', $oNodeShape);
+    }
+
+    /**
      * Read a custom shape drawn from a preset as an AutoShape. A custom shape of any other geometry
      * -- a freeform, fontwork -- is not one, and is left out.
      */
     protected function loadShapeAutoShape(DOMElement $oNodeShape, ShapeContainerInterface $container): void
     {
-        $oNodeGeometry = $this->oXMLReader->getElement('draw:enhanced-geometry', $oNodeShape);
-        if (!$oNodeGeometry instanceof DOMElement) {
-            return;
-        }
-        $type = $oNodeGeometry->getAttribute('draw:type');
-        $type = 0 === strpos($type, 'ooxml-') ? substr($type, strlen('ooxml-')) : (self::CUSTOM_SHAPE_TYPES[$type] ?? '');
+        $type = $this->loadCustomShapeType($oNodeShape);
         if (!in_array($type, (new ReflectionClass(AutoShape::class))->getConstants(), true)) {
             return;
         }
@@ -1875,6 +1902,8 @@ class ODPresentation implements ReaderInterface
     /**
      * Read Shape RichText.
      *
+     * @param DOMElement $oNodeFrame the `draw:frame` of a text box, or the `draw:custom-shape` read
+     *                                as one, which holds its paragraphs itself
      * @param null|ShapeContainerInterface $container where the shape goes, the slide itself unless
      *                                                the frame was read out of the slide note
      */
@@ -1885,6 +1914,7 @@ class ODPresentation implements ReaderInterface
         ($container ?? $this->oPhpPresentation->getActiveSlide())->addShape($oShape);
         $oShape->setParagraphs([]);
 
+        $oShape->setName($oNodeFrame->getAttribute('draw:name'));
         $oShape->setDescription($this->loadShapeDescription($oNodeFrame));
         $oShape->setDecorative($this->loadShapeDecorative($oNodeFrame));
         $oShape->setWidth($oNodeFrame->hasAttribute('svg:width') ? CommonDrawing::centimetersToPixels((float) substr($oNodeFrame->getAttribute('svg:width'), 0, -2)) : 0);
@@ -1937,7 +1967,7 @@ class ODPresentation implements ReaderInterface
             }
         }
 
-        foreach ($this->oXMLReader->getElements('draw:text-box/*', $oNodeFrame) as $oNodeParagraph) {
+        foreach ($this->oXMLReader->getElements('draw:text-box/*|text:p|text:list', $oNodeFrame) as $oNodeParagraph) {
             $this->levelParagraph = 0;
             if ($oNodeParagraph instanceof DOMElement) {
                 if ('text:p' == $oNodeParagraph->nodeName) {

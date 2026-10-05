@@ -2679,6 +2679,105 @@ class ODPresentationTest extends TestCase
     }
 
     /**
+     * @return array<string, array{0: string, 1: bool, 2: bool, 3: string, 4: class-string, 5?: bool}>
+     */
+    public static function dataProviderCustomShapeTextBox(): array
+    {
+        return [
+            // the text box of an OOXML file, as LibreOffice writes it
+            'rectangle with text' => ['ooxml-rect', false, false, 'Text', RichText::class],
+            'rectangle of LibreOffice with text' => ['rectangle', false, false, 'Text', RichText::class],
+            'text box of LibreOffice with text' => ['mso-spt202', false, false, 'Text', RichText::class],
+            // a bulleted paragraph is a `text:list` in the shape, not a `text:p`
+            'rectangle with nothing but a list' => ['ooxml-rect', false, false, 'Text', RichText::class, true],
+            // a shape that shows something of its own
+            'filled rectangle with text' => ['ooxml-rect', true, false, 'Text', AutoShape::class],
+            'outlined rectangle with text' => ['ooxml-rect', false, true, 'Text', AutoShape::class],
+            'rectangle without text' => ['ooxml-rect', false, false, '', AutoShape::class],
+            'ellipse with text' => ['ooxml-ellipse', false, false, 'Text', AutoShape::class],
+        ];
+    }
+
+    /**
+     * @dataProvider dataProviderCustomShapeTextBox
+     *
+     * @param class-string $expected
+     */
+    #[DataProvider('dataProviderCustomShapeTextBox')]
+    public function testCustomShapeTextBox(string $customShapeType, bool $fill, bool $outline, string $text, string $expected, bool $bullet = false): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oShape = $oPhpPresentation->getActiveSlide()->createRichTextShape();
+        $oShape->setOffsetX(10)->setOffsetY(20)->setWidth(300)->setHeight(80);
+        if ($fill) {
+            $oShape->getFill()->setFillType(Fill::FILL_SOLID)->setStartColor(new Color('FFFFCC00'));
+        }
+        if ($outline) {
+            $oShape->getBorder()->setLineStyle(Border::LINE_SINGLE)->setLineWidth(2);
+        }
+        if ('' !== $text) {
+            $oShape->createTextRun($text)->setLanguage('fr-FR')->getFont()->setBold(true);
+            $oShape->createTextRun('Link')->getHyperlink()->setUrl('https://example.org/');
+            $oShape->createParagraph()->createTextRun('Second');
+        }
+        if ($bullet) {
+            foreach ($oShape->getParagraphs() as $oParagraph) {
+                $oParagraph->getBulletStyle()->setBulletType(Bullet::TYPE_BULLET);
+            }
+        }
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new ODPresentationWriter($oPhpPresentation))->save($file);
+
+        // LibreOffice puts the paragraphs in the custom shape itself, before its geometry
+        $oZip = new ZipArchive();
+        $oZip->open($file);
+        $content = str_replace(
+            ['<draw:frame ', '<draw:text-box>', '</draw:text-box></draw:frame>', '<draw:text-box/></draw:frame>'],
+            [
+                '<draw:custom-shape draw:name="Box" ',
+                '',
+                '<draw:enhanced-geometry draw:type="' . $customShapeType . '"/></draw:custom-shape>',
+                '<draw:enhanced-geometry draw:type="' . $customShapeType . '"/></draw:custom-shape>',
+            ],
+            (string) $oZip->getFromName('content.xml')
+        );
+        self::assertStringContainsString('</draw:custom-shape>', $content);
+        self::assertSame($bullet, false === strpos($content, '"><text:p'));
+        $oZip->addFromString('content.xml', $content);
+        $oZip->close();
+
+        $oPhpPresentationRead = (new ODPresentation())->load($file);
+        unlink($file);
+
+        $arrayShape = array_values((array) $oPhpPresentationRead->getActiveSlide()->getShapeCollection());
+        self::assertCount(1, $arrayShape);
+        self::assertInstanceOf($expected, $arrayShape[0]);
+        self::assertEquals('Box', $arrayShape[0]->getName());
+        self::assertEquals(10, $arrayShape[0]->getOffsetX());
+        self::assertEquals(20, $arrayShape[0]->getOffsetY());
+        self::assertEquals(300, $arrayShape[0]->getWidth());
+        self::assertEquals(80, $arrayShape[0]->getHeight());
+        if (!$arrayShape[0] instanceof RichText) {
+            return;
+        }
+
+        $arrayParagraph = $arrayShape[0]->getParagraphs();
+        self::assertCount(2, $arrayParagraph);
+        $arrayRun = $arrayParagraph[0]->getRichTextElements();
+        self::assertCount(2, $arrayRun);
+        self::assertInstanceOf(RichText\Run::class, $arrayRun[0]);
+        self::assertEquals($text, $arrayRun[0]->getText());
+        self::assertTrue($arrayRun[0]->getFont()->isBold());
+        self::assertEquals('fr-FR', $arrayRun[0]->getLanguage());
+        self::assertInstanceOf(RichText\Run::class, $arrayRun[1]);
+        self::assertEquals('Link', $arrayRun[1]->getText());
+        self::assertFalse($arrayRun[1]->getFont()->isBold());
+        self::assertEquals('https://example.org/', $arrayRun[1]->getHyperlink()->getUrl());
+        self::assertEquals('Second', $arrayParagraph[1]->getPlainText());
+    }
+
+    /**
      * @return array<string, array{0: string, 1: array<int, null|string>, 2?: bool}>
      */
     public static function dataProviderParagraphContent(): array
