@@ -77,6 +77,12 @@ class ContentTypes extends AbstractDecoratorWriter
             }
         }
 
+        // Notes master, with a theme of its own
+        if ($this->hasNotes()) {
+            $this->writeOverrideContentType($objWriter, '/ppt/notesMasters/notesMaster1.xml', 'application/vnd.openxmlformats-officedocument.presentationml.notesMaster+xml');
+            $this->writeOverrideContentType($objWriter, '/ppt/theme/theme' . (count($this->oPresentation->getAllMasterSlides()) + 1) . '.xml', 'application/vnd.openxmlformats-officedocument.theme+xml');
+        }
+
         // Slides
         $hasComments = false;
         $slideCount = $this->oPresentation->getSlideCount();

@@ -47,6 +47,7 @@ class PptSlides extends AbstractSlide
             // Add note slide
             if ($oSlide->getNote() instanceof Note) {
                 if (count($oSlide->getNote()->getShapeCollection()) > 0) {
+                    $this->oZip->addFromString('ppt/notesSlides/_rels/notesSlide' . ($idx + 1) . '.xml.rels', $this->writeNoteRelationships($idx + 1));
                     $this->oZip->addFromString('ppt/notesSlides/notesSlide' . ($idx + 1) . '.xml', $this->writeNote($oSlide->getNote()));
                 }
             }
@@ -159,6 +160,30 @@ class PptSlides extends AbstractSlide
             $this->writeRelationship($objWriter, $relId, 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide', '../notesSlides/notesSlide' . ($idxSlide + 1) . '.xml');
         }
 
+        $objWriter->endElement();
+
+        // Return
+        return $objWriter->getData();
+    }
+
+    /**
+     * Write the relationships of a notes slide: the slide it belongs to, and the notes master.
+     *
+     * @return string XML Output
+     */
+    protected function writeNoteRelationships(int $slideNumber): string
+    {
+        // Create XML writer
+        $objWriter = new XMLWriter(XMLWriter::STORAGE_MEMORY);
+
+        // XML header
+        $objWriter->startDocument('1.0', 'UTF-8', 'yes');
+
+        // Relationships
+        $objWriter->startElement('Relationships');
+        $objWriter->writeAttribute('xmlns', 'http://schemas.openxmlformats.org/package/2006/relationships');
+        $this->writeRelationship($objWriter, 1, 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide', '../slides/slide' . $slideNumber . '.xml');
+        $this->writeRelationship($objWriter, 2, 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster', '../notesMasters/notesMaster1.xml');
         $objWriter->endElement();
 
         // Return

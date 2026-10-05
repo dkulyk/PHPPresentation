@@ -1866,6 +1866,37 @@ class PowerPoint2007Test extends TestCase
         self::assertInstanceOf('PhpOffice\\PhpPresentation\\PhpPresentation', $oPhpPresentation);
     }
 
+    public function testLoadingFileWithNotesMaster(): void
+    {
+        // A note on the second of three slides, as this library writes it
+        $oPhpPresentation = new PhpPresentation();
+        $oPhpPresentation->createSlide()->getNote()->createRichTextShape()->createTextRun('Second note');
+        $oPhpPresentation->createSlide();
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new PowerPoint2007Writer($oPhpPresentation))->save($file);
+        $this->assertNoteOfSecondSlide((new PowerPoint2007())->load($file));
+        unlink($file);
+
+        // The same deck, as LibreOffice 26.8 writes it
+        $this->assertNoteOfSecondSlide((new PowerPoint2007())->load(PHPPRESENTATION_TESTS_BASE_DIR . '/resources/files/PPTX_NotesMaster_LibreOffice.pptx'));
+    }
+
+    private function assertNoteOfSecondSlide(PhpPresentation $oPhpPresentation): void
+    {
+        // The notes master is neither a slide nor a slide master
+        self::assertCount(3, $oPhpPresentation->getAllSlides());
+        self::assertCount(1, $oPhpPresentation->getAllMasterSlides());
+        self::assertCount(0, $oPhpPresentation->getSlide(0)->getNote()->getShapeCollection());
+        self::assertCount(0, $oPhpPresentation->getSlide(2)->getNote()->getShapeCollection());
+
+        // The shape of the text of the notes comes after the image of the slide
+        $oShapes = $oPhpPresentation->getSlide(1)->getNote()->getShapeCollection();
+        self::assertCount(2, $oShapes);
+        $oShape = end($oShapes);
+        self::assertInstanceOf(RichText::class, $oShape);
+        self::assertEquals('Second note', $oShape->getPlainText());
+    }
+
     public function testShapeDecorative(): void
     {
         $oPhpPresentation = new PhpPresentation();
@@ -2555,10 +2586,7 @@ class PowerPoint2007Test extends TestCase
         self::assertEquals([1, 1], [$countMajor, $countMinor]);
         $oZip->deleteName('ppt/theme/theme1.xml');
         $oZip->addFromString('ppt/theme/theme1.xml', $sTheme);
-        $sRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/%s" Target="%s"/></Relationships>';
-        $oZip->addFromString('ppt/notesSlides/_rels/notesSlide1.xml.rels', sprintf($sRels, 'notesMaster', '../notesMasters/notesMaster1.xml'));
-        $oZip->addFromString('ppt/notesMasters/notesMaster1.xml', '<p:notesMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"/>');
-        $oZip->addFromString('ppt/notesMasters/_rels/notesMaster1.xml.rels', sprintf($sRels, 'theme', '../theme/theme2.xml'));
+        $oZip->deleteName('ppt/theme/theme2.xml');
         $oZip->addFromString('ppt/theme/theme2.xml', str_replace('Aptos', 'Notes Font', $sTheme));
         $oZip->close();
 
