@@ -36,6 +36,7 @@ use PhpOffice\PhpPresentation\Shape\Drawing\Base64;
 use PhpOffice\PhpPresentation\Shape\Drawing\Gd;
 use PhpOffice\PhpPresentation\Shape\Group;
 use PhpOffice\PhpPresentation\Shape\Line;
+use PhpOffice\PhpPresentation\Shape\Media;
 use PhpOffice\PhpPresentation\Shape\Placeholder;
 use PhpOffice\PhpPresentation\Shape\RichText;
 use PhpOffice\PhpPresentation\Shape\RichText\Field;
@@ -1180,6 +1181,10 @@ class ODPresentation implements ReaderInterface
                     if ($this->oXMLReader->getElement('draw:object', $oNode) && $this->loadShapeChart($oNode, $container)) {
                         break;
                     }
+                    // A video or a sound comes before the picture a producer may show for it
+                    if ($this->loadImages && $this->loadShapeMedia($oNode, $container)) {
+                        break;
+                    }
                     if ($this->loadImages && $this->oXMLReader->getElement('draw:image', $oNode)) {
                         $this->loadShapeDrawing($oNode, $container);
                     } elseif ($this->oXMLReader->getElement('draw:text-box', $oNode)) {
@@ -1302,6 +1307,46 @@ class ODPresentation implements ReaderInterface
             $shape->setData('data:' . $mimetype . ';base64,' . base64_encode($imageFile));
         }
 
+        $this->loadShapeGraphic($shape, $oNodeFrame, $container);
+    }
+
+    /**
+     * Read the video or the sound a frame holds.
+     *
+     * It is a `draw:plugin` whose `xlink:href` names a file of the package, wherever in it: this
+     * library writes it under `Pictures/`, LibreOffice under `Media/`. It is not copied: the shape
+     * points at it inside the file being read, so that file has to be there when the presentation
+     * is written. What is linked to outside the package cannot be pointed at that way.
+     *
+     * @return bool false when the frame holds none that can be read
+     */
+    protected function loadShapeMedia(DOMElement $oNodeFrame, ShapeContainerInterface $container): bool
+    {
+        $oNodePlugin = $this->oXMLReader->getElement('draw:plugin', $oNodeFrame);
+        if (!$oNodePlugin instanceof DOMElement) {
+            return false;
+        }
+        $part = (string) preg_replace('#^\./#', '', $oNodePlugin->getAttribute('xlink:href'));
+        // a path is cut at its first `#` when it is read, so there is no pointing into a file
+        // whose own name has one
+        if (false === $this->oZip->locateName($part) || false !== strpos($this->oZip->filename, '#')) {
+            return false;
+        }
+        $shape = new Media();
+        // the archive knows its own name in full, whatever path it was opened by
+        $shape->setPath('zip://' . $this->oZip->filename . '#' . $part, false);
+        $this->loadShapeGraphic($shape, $oNodeFrame, $container);
+
+        return true;
+    }
+
+    /**
+     * Read what the frame of a picture, a video or a sound says of it, and put it where it goes.
+     *
+     * @param Base64|Gd|Media $shape
+     */
+    protected function loadShapeGraphic($shape, DOMElement $oNodeFrame, ShapeContainerInterface $container): void
+    {
         $shape->getShadow()->setVisible(false);
         $shape->setName($oNodeFrame->hasAttribute('draw:name') ? $oNodeFrame->getAttribute('draw:name') : '');
         $shape->setDescription($this->loadShapeDescription($oNodeFrame));

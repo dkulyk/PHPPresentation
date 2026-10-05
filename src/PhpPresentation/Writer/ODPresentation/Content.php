@@ -1226,6 +1226,8 @@ class Content extends AbstractDecoratorWriter
                 $this->writeShapeLine($objWriter, $shape);
             } elseif ($shape instanceof Chart) {
                 $this->writeShapeChart($objWriter, $shape);
+            } elseif ($shape instanceof Media) {
+                $this->writeShapeMedia($objWriter, $shape);
             } elseif ($shape instanceof AbstractDrawingAdapter) {
                 $this->writeShapeDrawing($objWriter, $shape);
             } elseif ($shape instanceof Group) {
