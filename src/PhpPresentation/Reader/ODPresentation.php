@@ -1983,64 +1983,87 @@ class ODPresentation implements ReaderInterface
                 }
             }
         }
-        $oDomList = $this->oXMLReader->getElements('text:span', $oNodeParent);
-        $oDomTextNodes = $this->oXMLReader->getElements('text()', $oNodeParent);
-        foreach ($oDomTextNodes as $oDomTextNode) {
-            if ('' != trim($oDomTextNode->nodeValue)) {
-                $oTextRun = $oParagraph->createTextRun();
-                $oTextRun->setText(trim($oDomTextNode->nodeValue));
-            }
-        }
-        foreach ($oDomList as $oNodeRichTextElement) {
-            if ($oNodeRichTextElement instanceof DOMElement) {
-                $this->readParagraphItem($oParagraph, $oNodeRichTextElement);
-            }
-        }
+        $this->readParagraphItem($oParagraph, $oNodeParent);
     }
 
     /**
-     * Read Paragraph Item.
+     * Read what a paragraph, or a span of it, holds, in the order it is written: its text, with
+     * the spaces and the tabs OpenDocument writes as elements, its line breaks, its links, its
+     * fields and its spans.
+     *
+     * @param string $keyStyle the text style of the span around, none for the paragraph itself
      */
-    protected function readParagraphItem(Paragraph $oParagraph, DOMElement $oNodeParent): void
+    protected function readParagraphItem(Paragraph $oParagraph, DOMElement $oNodeParent, string $keyStyle = ''): void
     {
-        if ($this->oXMLReader->elementExists('text:line-break', $oNodeParent)) {
-            $oParagraph->createBreak();
-        } else {
-            // A field is a run whose text the reading application recomputes, and OpenDocument
-            // wraps it in the same `text:span` an ordinary run gets, so what it is has to be
-            // looked for before the run is made
-            $oNodeField = $this->oXMLReader->getElement(
-                '(' . implode('|', array_keys(self::FIELD_OOXML)) . ')',
-                $oNodeParent
-            );
-            $oTextRun = $oNodeField instanceof DOMElement
-                ? $oParagraph->createField(self::FIELD_OOXML[$oNodeField->nodeName])
-                : $oParagraph->createTextRun();
-            if ($oNodeParent->hasAttribute('text:style-name')) {
-                $keyStyle = $oNodeParent->getAttribute('text:style-name');
-                if (isset($this->arrayStyles[$keyStyle])) {
-                    $oTextRun->setFont($this->arrayStyles[$keyStyle]['font']);
-                    if (null !== $this->arrayStyles[$keyStyle]['language']) {
-                        $oTextRun->setLanguage($this->arrayStyles[$keyStyle]['language']);
+        $isSpan = 'text:span' === $oNodeParent->nodeName;
+        if ($isSpan && $oNodeParent->hasAttribute('text:style-name')) {
+            $keyStyle = $oNodeParent->getAttribute('text:style-name');
+        }
+        // a span that holds nothing is still a run, the one an empty paragraph keeps its font in
+        $oNodes = $isSpan && !$oNodeParent->hasChildNodes()
+            ? [$oNodeParent->ownerDocument->createTextNode('')]
+            : $oNodeParent->childNodes;
+        $oTextRun = null;
+        foreach ($oNodes as $oNode) {
+            $name = $oNode->nodeName;
+            // A link and a field are a run of their own; a field is a run whose text the reading
+            // application recomputes, and it holds the text it stands in for
+            $isRun = 'text:a' === $name || isset(self::FIELD_OOXML[$name]);
+            if (!$oNode instanceof DOMElement) {
+                // White space with a line feed, at an end of a text, is how the file is laid out,
+                // and so is a paragraph of nothing but white space; a span of it is text
+                $isWhole = $oNodeParent->childNodes->length < 2;
+                $text = !in_array($oNode->nodeType, [XML_TEXT_NODE, XML_CDATA_SECTION_NODE], true) ? null : $oNode->nodeValue;
+                if (null !== $text && !($isSpan && $isWhole)) {
+                    $text = preg_replace('/^\s*[\r\n]\s*|\s*[\r\n]\s*$/', '', $text);
+                    $text = '' === ($isWhole ? trim((string) $text) : $text) ? null : $text;
+                }
+            } elseif ($isRun) {
+                $text = $oNode->textContent;
+            } elseif ('text:s' === $name) {
+                $text = str_repeat(' ', max(1, (int) $oNode->getAttribute('text:c')));
+            } elseif ('text:tab' === $name) {
+                $text = "\t";
+            } elseif (in_array($name, ['text:line-break', 'text:span', 'text:note', 'office:annotation'], true)) {
+                // a note and a comment are not text of the paragraph
+                if ('text:line-break' === $name) {
+                    $oParagraph->createBreak();
+                } elseif ('text:span' === $name) {
+                    $this->readParagraphItem($oParagraph, $oNode, $keyStyle);
+                }
+                $text = $oTextRun = null;
+            } else {
+                // anything else, a field this library has no type for, is the text it holds
+                $text = '' === $oNode->textContent ? null : $oNode->textContent;
+            }
+            if (null === $text) {
+                continue;
+            }
+            if (null === $oTextRun || $isRun) {
+                $oTextRun = isset(self::FIELD_OOXML[$name])
+                    ? $oParagraph->createField(self::FIELD_OOXML[$name])
+                    : $oParagraph->createTextRun();
+                // the span of a link is around it or in it
+                $oNodeSpan = $oNode instanceof DOMElement ? $this->oXMLReader->getElement('text:span[@text:style-name]', $oNode) : null;
+                $keyRun = $oNodeSpan instanceof DOMElement ? $oNodeSpan->getAttribute('text:style-name') : $keyStyle;
+                if (isset($this->arrayStyles[$keyRun])) {
+                    $oTextRun->setFont($this->arrayStyles[$keyRun]['font']);
+                    if (null !== $this->arrayStyles[$keyRun]['language']) {
+                        $oTextRun->setLanguage($this->arrayStyles[$keyRun]['language']);
                     }
                 }
             }
-            $oTextRunLink = $this->oXMLReader->getElement('text:a', $oNodeParent);
-            if ($oTextRunLink instanceof DOMElement) {
-                $oTextRun->setText($oTextRunLink->nodeValue);
-                if ($oTextRunLink->hasAttribute('xlink:href')) {
-                    $href = $oTextRunLink->getAttribute('xlink:href');
+            $oTextRun->setText($oTextRun->getText() . $text);
+            if ($isRun && $oNode instanceof DOMElement) {
+                if ($oNode->hasAttribute('xlink:href')) {
+                    $href = $oNode->getAttribute('xlink:href');
                     if (0 === strpos($href, '#') && isset($this->arraySlideNumbers[substr($href, 1)])) {
                         $oTextRun->getHyperlink()->setSlideNumber($this->arraySlideNumbers[substr($href, 1)]);
                     } else {
                         $oTextRun->getHyperlink()->setUrl($href);
                     }
                 }
-            } elseif ($oNodeField instanceof DOMElement) {
-                // the span holds the field, and the field holds the text it stands in for
-                $oTextRun->setText($oNodeField->nodeValue);
-            } else {
-                $oTextRun->setText($oNodeParent->nodeValue);
+                $oTextRun = null;
             }
         }
     }

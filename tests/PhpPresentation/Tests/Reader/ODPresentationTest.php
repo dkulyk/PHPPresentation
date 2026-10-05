@@ -2678,6 +2678,101 @@ class ODPresentationTest extends TestCase
         self::assertEquals($expected, $arrayShape[0]->getType());
     }
 
+    /**
+     * @return array<string, array{0: string, 1: array<int, null|string>, 2?: bool}>
+     */
+    public static function dataProviderParagraphContent(): array
+    {
+        return [
+            'line break in a span' => ['<text:span>one<text:line-break/>two</text:span>', ['one', null, 'two']],
+            'line break in the span of a list item' => ['<text:span>one<text:line-break/>two</text:span>', ['one', null, 'two'], true],
+            'text of the paragraph itself' => [
+                'plain<text:line-break/>second <text:span text:style-name="{T}">bold</text:span> tail',
+                ['plain', null, 'second ', '*bold', ' tail'],
+            ],
+            'spaces and a tab' => ['<text:span>a <text:s text:c="2"/>b<text:tab/>c<text:s/></text:span>', ["a   b\tc "]],
+            'space in the paragraph itself' => ['a<text:s/>b', ['a b']],
+            // LibreOffice writes the space between two words formatted apart outside their spans
+            'space between two spans' => ['<text:span>a</text:span> <text:span>b</text:span>', ['a', ' ', 'b']],
+            'line feed between two spans' => ["<text:span>a</text:span>\n  <text:span>b</text:span>", ['a', 'b']],
+            'link in the paragraph itself' => [
+                'see <text:a xlink:href="https://example.org/">here</text:a>',
+                ['see ', 'here@https://example.org/'],
+            ],
+            'link in its span' => [
+                '<text:span text:style-name="{T}"><text:a xlink:href="https://example.org/">here</text:a></text:span>',
+                ['*here@https://example.org/'],
+            ],
+            'link around its span' => [
+                '<text:a xlink:href="https://example.org/"><text:span text:style-name="{T}">here</text:span></text:a>',
+                ['*here@https://example.org/'],
+            ],
+            'field in the paragraph itself' => ['page <text:page-number>3</text:page-number>', ['page ', '#3']],
+            'field in its span' => ['<text:span text:style-name="{T}"><text:page-number>3</text:page-number></text:span>', ['*#3']],
+            'span in a span' => [
+                '<text:span text:style-name="{T}">x<text:span>y</text:span></text:span><text:span>z</text:span>',
+                ['*x', '*y', 'z'],
+            ],
+            'link without an address' => ['<text:a>here</text:a>', ['here']],
+            'link to a slide' => ['<text:a xlink:href="#Second">here</text:a>', ['here@2']],
+            // LibreOffice writes the name of the slide as a field this library has no type for
+            'element that is no run' => [
+                '<text:span text:style-name="{T}"><loext:page-name>&lt;name&gt;</loext:page-name></text:span>',
+                ['*<name>'],
+            ],
+            'comment in a span' => ['<text:span>a<office:annotation><text:p>b</text:p></office:annotation>c</text:span>', ['a', 'c']],
+            'comment and an empty span' => ['<text:span>a<!-- b --></text:span><text:span/>', ['a', '']],
+            'text laid out on lines of its own' => ["\n    Hello world\n   ", ['Hello world']],
+            'nothing but a space' => [' ', []],
+            'span of nothing but white space' => ["<text:span>\n  </text:span>", ["\n  "]],
+        ];
+    }
+
+    /**
+     * What a paragraph holds is read in the order it is written, whatever holds it.
+     *
+     * @dataProvider dataProviderParagraphContent
+     *
+     * @param string $xml what the paragraph holds, `{T}` standing for the name of a bold text style
+     * @param array<int, null|string> $expected each run -- `*` where it is bold, `#` where it is a
+     *                                          field, its text, `@` and its link -- null for a line break
+     * @param bool $bullet whether the paragraph is an item of a list
+     */
+    #[DataProvider('dataProviderParagraphContent')]
+    public function testParagraphContent(string $xml, array $expected, bool $bullet = false): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oShape = $oPhpPresentation->getActiveSlide()->createRichTextShape();
+        $oShape->createTextRun('Text')->getFont()->setBold(true);
+        $oShape->getActiveParagraph()->getBulletStyle()->setBulletType($bullet ? Bullet::TYPE_BULLET : Bullet::TYPE_NONE);
+        $oPhpPresentation->createSlide()->setName('Second');
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new ODPresentationWriter($oPhpPresentation))->save($file);
+
+        $oZip = new ZipArchive();
+        $oZip->open($file);
+        $content = (string) $oZip->getFromName('content.xml');
+        self::assertSame(1, preg_match('#<text:span text:style-name="([^"]+)">Text</text:span>#', $content, $matches));
+        self::assertSame($bullet, false !== strpos($content, '<text:list-item>'));
+        $oZip->addFromString('content.xml', str_replace($matches[0], str_replace('{T}', $matches[1], $xml), $content));
+        $oZip->close();
+
+        $oPhpPresentationRead = (new ODPresentation())->load($file);
+        unlink($file);
+
+        $oShape = $oPhpPresentationRead->getSlide(0)->getShapeCollection()[0];
+        self::assertInstanceOf(RichText::class, $oShape);
+        $actual = [];
+        foreach ($oShape->getParagraph(0)->getRichTextElements() as $oElement) {
+            $actual[] = $oElement instanceof RichText\Run
+                ? ($oElement->getFont()->isBold() ? '*' : '') . ($oElement instanceof Field ? '#' : '') . $oElement->getText()
+                    . ($oElement->hasHyperlink() ? '@' . ($oElement->getHyperlink()->isInternal() ? $oElement->getHyperlink()->getSlideNumber() : $oElement->getHyperlink()->getUrl()) : '')
+                : null;
+        }
+        self::assertSame($expected, $actual);
+    }
+
     public function testGroupSurvivesTheRoundTrip(): void
     {
         $oPhpPresentation = new PhpPresentation();
