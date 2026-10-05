@@ -63,6 +63,15 @@ class PptPresentation extends AbstractDecoratorWriter
         // theme
         ++$relationId;
 
+        // p:notesMasterIdLst
+        if ($this->hasNotes()) {
+            $objWriter->startElement('p:notesMasterIdLst');
+            $objWriter->startElement('p:notesMasterId');
+            $objWriter->writeAttribute('r:id', 'rId' . $relationId++);
+            $objWriter->endElement();
+            $objWriter->endElement();
+        }
+
         // p:sldIdLst
         $objWriter->startElement('p:sldIdLst');
         // Write slides

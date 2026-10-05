@@ -114,6 +114,11 @@ class Relationships extends AbstractDecoratorWriter
         // Relationship theme/theme1.xml
         $this->writeRelationship($objWriter, $relationId++, 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme', 'theme/theme1.xml');
 
+        // Relationship notesMasters/notesMaster1.xml
+        if ($this->hasNotes()) {
+            $this->writeRelationship($objWriter, $relationId++, 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster', 'notesMasters/notesMaster1.xml');
+        }
+
         // Relationships with slides
         $slideCount = $this->getPresentation()->getSlideCount();
         for ($i = 0; $i < $slideCount; ++$i) {
