@@ -190,7 +190,7 @@ abstract class AbstractShape implements ComparableInterface
             if ($pOverrideOld) {
                 // Remove drawing from old ShapeContainerInterface
                 foreach ($this->container->getShapeCollection() as $key => $shape) {
-                    if ($shape->getHashCode() == $this->getHashCode()) {
+                    if ($shape === $this) {
                         $this->container->unsetShape($key);
                         $this->container = null;
 
