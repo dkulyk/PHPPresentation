@@ -2462,6 +2462,26 @@ class ODPresentationTest extends TestCase
         self::assertTrue($oChartRead->getLegend()->getFont()->isItalic());
     }
 
+    public function testChartFontFormatSurvivesTheRoundTrip(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $chartType = new Chart\Type\Bar();
+        $chartType->addSeries(new Chart\Series('Sales', ['Jan' => '5']));
+        $oChart = $oPhpPresentation->getActiveSlide()->createChartShape();
+        $oChart->getPlotArea()->setType($chartType);
+        $oChart->getTitle()->getFont()->setName('Arial')->setSize(20)->setFormat(Font::FORMAT_EAST_ASIAN);
+        $oChart->getLegend()->getFont()->setBold(true)->setItalic(true)->setFormat(Font::FORMAT_COMPLEX_SCRIPT);
+
+        $oChartRead = $this->roundTripChart($oPhpPresentation)->getActiveSlide()->getShapeCollection()[0];
+        self::assertInstanceOf(Chart::class, $oChartRead);
+        self::assertEquals(Font::FORMAT_EAST_ASIAN, $oChartRead->getTitle()->getFont()->getFormat());
+        self::assertEquals('Arial', $oChartRead->getTitle()->getFont()->getName());
+        self::assertEquals(20, $oChartRead->getTitle()->getFont()->getSize());
+        self::assertEquals(Font::FORMAT_COMPLEX_SCRIPT, $oChartRead->getLegend()->getFont()->getFormat());
+        self::assertTrue($oChartRead->getLegend()->getFont()->isBold());
+        self::assertTrue($oChartRead->getLegend()->getFont()->isItalic());
+    }
+
     public function testChartWithoutTitleNorLegendSurvivesTheRoundTrip(): void
     {
         $oPhpPresentation = new PhpPresentation();
