@@ -83,6 +83,18 @@ class PhpPresentationTest extends TestCase
         self::assertEquals(2, $object->getSlideCount());
     }
 
+    public function testAddExternalSlideCopy(): void
+    {
+        $origin = new PhpPresentation();
+        $slide = $origin->getSlide();
+        $object = new PhpPresentation();
+        $copy = $object->addExternalSlide($slide->copy());
+
+        self::assertSame($object, $copy->getParent());
+        self::assertSame([$slide], $origin->getAllSlides());
+        self::assertSame($origin, $slide->getParent());
+    }
+
     /**
      * Test copy presentation.
      */
@@ -95,6 +107,12 @@ class PhpPresentationTest extends TestCase
 
         self::assertInstanceOf('PhpOffice\\PhpPresentation\\PhpPresentation', $copy);
         self::assertEquals(2, $copy->getSlideCount());
+        self::assertEquals(2, $object->getSlideCount());
+        foreach ($copy->getAllSlides() as $key => $slide) {
+            self::assertSame($copy, $slide->getParent());
+            self::assertNotSame($object->getSlide($key), $slide);
+            self::assertSame($object, $object->getSlide($key)->getParent());
+        }
     }
 
     /**

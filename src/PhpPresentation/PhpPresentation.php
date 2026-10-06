@@ -339,26 +339,10 @@ class PhpPresentation
     {
         $copied = clone $this;
 
-        $slideCount = count($this->slideCollection);
-
-        // Because the rebindParent() method on AbstractSlide removes the slide
-        // from the parent (current $this which we're cloning) presentation, we
-        // save the collection. This way, after the copying has finished, we can
-        // return the slides to the original presentation.
-        $oldSlideCollection = $this->slideCollection;
-        $newSlideCollection = [];
-
-        for ($i = 0; $i < $slideCount; ++$i) {
-            $newSlideCollection[$i] = $oldSlideCollection[$i]->copy();
-            $newSlideCollection[$i]->rebindParent($copied);
+        foreach ($this->slideCollection as $key => $slide) {
+            $copied->slideCollection[$key] = $slide->copy();
+            $copied->slideCollection[$key]->rebindParent($copied);
         }
-
-        // Give the copied presentation a copied slide collection which the
-        // copied slides have been rebind to the copied presentation.
-        $copied->slideCollection = $newSlideCollection;
-
-        // Return the original slides to the original presentation.
-        $this->slideCollection = $oldSlideCollection;
 
         return $copied;
     }

@@ -46,6 +46,22 @@ In a presentation of `A B C D`, moving `A` to 2 gives `B C A D`.
 It throws an `OutOfBoundsException` for an index past the last slide, and an
 `InvalidParameterException` for a slide the presentation does not hold.
 
+## Copy a slide
+
+Use the method `copy` to get a copy of a slide, and `addSlide` to put it in the presentation.
+
+``` php
+<?php
+
+$copy = $presentation->addSlide($slide->copy());
+## Or right after the slide it was copied from
+$copy = $presentation->addSlide($slide->copy(), $presentation->getIndex($slide) + 1);
+```
+
+The copy is another slide of the same presentation, with the same layout. Its shapes, the shapes
+of its groups, its note, its transition and its animations are its own : changing one of them
+leaves the slide it was copied from as it was.
+
 ## Properties
 
 ### Name

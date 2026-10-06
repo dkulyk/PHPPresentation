@@ -296,7 +296,10 @@ abstract class AbstractSlide implements ComparableInterface, ShapeContainerInter
      */
     public function rebindParent(PhpPresentation $parent): self
     {
-        $this->parent->removeSlideByIndex($this->parent->getIndex($this));
+        $index = $this->parent->getIndex($this);
+        if (null !== $index) {
+            $this->parent->removeSlideByIndex($index);
+        }
         $this->parent = $parent;
 
         return $this;

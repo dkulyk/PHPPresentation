@@ -134,18 +134,47 @@ class Slide extends AbstractSlide implements ComparableInterface, ShapeContainer
 
     public function __clone()
     {
-        // Set parent
-        $this->parent = clone $this->parent;
+        // A copy is another slide of the same presentation
+        $this->identifier = md5(mt_rand(0, mt_getrandmax()) . time());
         // Shape collection
-        foreach ($this->shapeCollection as &$shape) {
-            $shape = clone $shape;
+        $shapes = $this->flattenShapes($this->shapeCollection);
+        $this->cloneShapeCollection();
+        $clones = $this->flattenShapes($this->shapeCollection);
+        // Animations, on the shapes of the copy
+        foreach ($this->animations as $key => $animation) {
+            $animated = [];
+            foreach ($animation->getShapeCollection() as $shape) {
+                $index = array_search($shape, $shapes, true);
+                $animated[] = false === $index ? $shape : $clones[$index];
+            }
+            $this->animations[$key] = (clone $animation)->setShapeCollection($animated);
         }
         // Transition
         if (isset($this->slideTransition)) {
             $this->slideTransition = clone $this->slideTransition;
         }
         // Note
-        $this->slideNote = clone $this->slideNote;
+        $this->setNote(clone $this->slideNote);
+    }
+
+    /**
+     * The shapes of a collection and of the groups in it, in document order.
+     *
+     * @param array<int, AbstractShape> $shapes
+     *
+     * @return array<int, AbstractShape>
+     */
+    private function flattenShapes(array $shapes): array
+    {
+        $flat = [];
+        foreach ($shapes as $shape) {
+            $flat[] = $shape;
+            if ($shape instanceof Shape\Group) {
+                $flat = array_merge($flat, $this->flattenShapes($shape->getShapeCollection()));
+            }
+        }
+
+        return $flat;
     }
 
     /**
