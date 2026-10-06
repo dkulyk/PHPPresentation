@@ -595,8 +595,8 @@ class ODPresentation implements ReaderInterface
                     $oShadow->setAlpha(100 - (int) substr($nodeGraphicProps->getAttribute('draw:shadow-opacity'), 0, -1));
                 }
                 if ($nodeGraphicProps->hasAttribute('draw:shadow-offset-x') && $nodeGraphicProps->hasAttribute('draw:shadow-offset-y')) {
-                    $offsetX = (float) substr($nodeGraphicProps->getAttribute('draw:shadow-offset-x'), 0, -2);
-                    $offsetY = (float) substr($nodeGraphicProps->getAttribute('draw:shadow-offset-y'), 0, -2);
+                    $offsetX = (float) $this->lengthToCentimeters($nodeGraphicProps->getAttribute('draw:shadow-offset-x'));
+                    $offsetY = (float) $this->lengthToCentimeters($nodeGraphicProps->getAttribute('draw:shadow-offset-y'));
                     $distance = 0;
                     if (0 != $offsetX) {
                         $distance = ($offsetX < 0 ? $offsetX * -1 : $offsetX);
@@ -616,7 +616,7 @@ class ODPresentation implements ReaderInterface
                 }
                 if ($nodeColumns->hasAttribute('fo:column-gap')) {
                     $columnSpacing = CommonDrawing::centimetersToPixels(
-                        (float) substr($nodeColumns->getAttribute('fo:column-gap'), 0, -2)
+                        (float) $this->lengthToCentimeters($nodeColumns->getAttribute('fo:column-gap'))
                     );
                 }
             }
@@ -659,7 +659,7 @@ class ODPresentation implements ReaderInterface
                     // rounded because a width goes into the file as centimetres, and a whole
                     // number of points is not a whole number of them
                     $border->setLineWidth(round(CommonDrawing::centimetersToPoints(
-                        (float) substr($nodeGraphicProps->getAttribute('svg:stroke-width'), 0, -2)
+                        (float) $this->lengthToCentimeters($nodeGraphicProps->getAttribute('svg:stroke-width'))
                     ), 4));
                 }
                 if ($nodeGraphicProps->hasAttribute('svg:stroke-color')) {
@@ -670,16 +670,16 @@ class ODPresentation implements ReaderInterface
             // spelled out rather than run through `centimetersToPixels()`, which rounds an inset to
             // a whole pixel, and kept to the six decimals the Writer writes.
             if ($nodeGraphicProps->hasAttribute('fo:padding-bottom')) {
-                $insetBottom = round((float) substr($nodeGraphicProps->getAttribute('fo:padding-bottom'), 0, -2) / 2.54 * CommonDrawing::DPI_96, 6);
+                $insetBottom = round((float) $this->lengthToCentimeters($nodeGraphicProps->getAttribute('fo:padding-bottom')) / 2.54 * CommonDrawing::DPI_96, 6);
             }
             if ($nodeGraphicProps->hasAttribute('fo:padding-left')) {
-                $insetLeft = round((float) substr($nodeGraphicProps->getAttribute('fo:padding-left'), 0, -2) / 2.54 * CommonDrawing::DPI_96, 6);
+                $insetLeft = round((float) $this->lengthToCentimeters($nodeGraphicProps->getAttribute('fo:padding-left')) / 2.54 * CommonDrawing::DPI_96, 6);
             }
             if ($nodeGraphicProps->hasAttribute('fo:padding-right')) {
-                $insetRight = round((float) substr($nodeGraphicProps->getAttribute('fo:padding-right'), 0, -2) / 2.54 * CommonDrawing::DPI_96, 6);
+                $insetRight = round((float) $this->lengthToCentimeters($nodeGraphicProps->getAttribute('fo:padding-right')) / 2.54 * CommonDrawing::DPI_96, 6);
             }
             if ($nodeGraphicProps->hasAttribute('fo:padding-top')) {
-                $insetTop = round((float) substr($nodeGraphicProps->getAttribute('fo:padding-top'), 0, -2) / 2.54 * CommonDrawing::DPI_96, 6);
+                $insetTop = round((float) $this->lengthToCentimeters($nodeGraphicProps->getAttribute('fo:padding-top')) / 2.54 * CommonDrawing::DPI_96, 6);
             }
             // Read whether the text is centred between the top and the bottom of the frame
             if ($nodeGraphicProps->hasAttribute('draw:textarea-vertical-align')) {
@@ -728,15 +728,17 @@ class ODPresentation implements ReaderInterface
             if ($nodeParagraphProps->hasAttribute('fo:line-height')) {
                 $lineHeightUnit = $this->getExpressionUnit($nodeParagraphProps->getAttribute('fo:line-height'));
                 $lineSpacingMode = $lineHeightUnit == '%' ? Paragraph::LINE_SPACING_MODE_PERCENT : Paragraph::LINE_SPACING_MODE_POINT;
-                $lineSpacing = $this->getExpressionValue($nodeParagraphProps->getAttribute('fo:line-height'));
+                $lineSpacing = '%' == $lineHeightUnit
+                    ? substr($nodeParagraphProps->getAttribute('fo:line-height'), 0, -1)
+                    : (string) round(CommonDrawing::centimetersToPoints((float) $this->lengthToCentimeters($nodeParagraphProps->getAttribute('fo:line-height'))));
             }
             // rounded because a spacing goes into the file as centimetres, and a whole number of
             // points is not a whole number of them
             if ($nodeParagraphProps->hasAttribute('fo:margin-bottom')) {
-                $spacingAfter = round((float) self::sizeToPoint($nodeParagraphProps->getAttribute('fo:margin-bottom')), 4);
+                $spacingAfter = round(CommonDrawing::centimetersToPoints((float) $this->lengthToCentimeters($nodeParagraphProps->getAttribute('fo:margin-bottom'))), 4);
             }
             if ($nodeParagraphProps->hasAttribute('fo:margin-top')) {
-                $spacingBefore = round((float) self::sizeToPoint($nodeParagraphProps->getAttribute('fo:margin-top')), 4);
+                $spacingBefore = round(CommonDrawing::centimetersToPoints((float) $this->lengthToCentimeters($nodeParagraphProps->getAttribute('fo:margin-top'))), 4);
             }
             $oAlignment = new Alignment();
             if ($nodeParagraphProps->hasAttribute('fo:text-align')) {
@@ -800,10 +802,10 @@ class ODPresentation implements ReaderInterface
                     $oNodeListProperties = $this->oXMLReader->getElement('style:list-level-properties', $oNodeListLevel);
                     if ($oNodeListProperties instanceof DOMElement) {
                         if ($oNodeListProperties->hasAttribute('text:min-label-width')) {
-                            $oAlignment->setIndent(CommonDrawing::centimetersToPixels((float) substr($oNodeListProperties->getAttribute('text:min-label-width'), 0, -2)));
+                            $oAlignment->setIndent(CommonDrawing::centimetersToPixels((float) $this->lengthToCentimeters($oNodeListProperties->getAttribute('text:min-label-width'))));
                         }
                         if ($oNodeListProperties->hasAttribute('text:space-before')) {
-                            $iSpaceBefore = CommonDrawing::centimetersToPixels((float) substr($oNodeListProperties->getAttribute('text:space-before'), 0, -2));
+                            $iSpaceBefore = CommonDrawing::centimetersToPixels((float) $this->lengthToCentimeters($oNodeListProperties->getAttribute('text:space-before')));
                             $iMarginLeft = $iSpaceBefore + $oAlignment->getIndent();
                             $oAlignment->setMarginLeft($iMarginLeft);
                         }
@@ -832,7 +834,7 @@ class ODPresentation implements ReaderInterface
             // The ODPresentation Writer measures a row height in points -- `Row::setHeight()` is
             // read as pixels by the PowerPoint2007 Writer, but this is the unit to invert here
             $rowHeight = (int) round(CommonDrawing::centimetersToPoints(
-                (float) substr($nodeTableRowProps->getAttribute('style:row-height'), 0, -2)
+                (float) $this->lengthToCentimeters($nodeTableRowProps->getAttribute('style:row-height'))
             ));
         }
         if ($nodeParagraphProps instanceof DOMElement) {
@@ -918,8 +920,8 @@ class ODPresentation implements ReaderInterface
     protected function loadBorder(Border $oBorder, string $value): void
     {
         $parts = explode(' ', $value);
-        if (isset($parts[0]) && 'pt' === substr($parts[0], -2)) {
-            $oBorder->setLineWidth((float) substr($parts[0], 0, -2) * 1.75);
+        if (null !== $this->lengthToCentimeters($parts[0])) {
+            $oBorder->setLineWidth(round(CommonDrawing::centimetersToPoints((float) $this->lengthToCentimeters($parts[0])) * 1.75, 4));
         }
         switch ($parts[1] ?? '') {
             case 'none':
@@ -1047,8 +1049,10 @@ class ODPresentation implements ReaderInterface
         if ('' !== $read('font-family', $suffixes)) {
             $oFont->setName($read('font-family', $suffixes));
         }
-        if ('' !== $read('font-size', $suffixes)) {
-            $oFont->setSize((int) substr($read('font-size', $suffixes), 0, -2));
+        // a size given as a percentage is no length, and is left to the default
+        $size = $this->lengthToCentimeters($read('font-size', $suffixes));
+        if (null !== $size) {
+            $oFont->setSize((int) round(CommonDrawing::centimetersToPoints($size), 4));
         }
         $oFont->setBold('bold' == $read('font-weight', $suffixes));
         $oFont->setItalic('italic' == $read('font-style', $suffixes));
@@ -1256,8 +1260,8 @@ class ODPresentation implements ReaderInterface
         $shape->setDescription($this->loadShapeDescription($oNodeFrame));
         $shape->setDecorative($this->loadShapeDecorative($oNodeFrame));
         $shape->setResizeProportional(false);
-        $shape->setWidth($oNodeFrame->hasAttribute('svg:width') ? CommonDrawing::centimetersToPixels((float) substr($oNodeFrame->getAttribute('svg:width'), 0, -2)) : 0);
-        $shape->setHeight($oNodeFrame->hasAttribute('svg:height') ? CommonDrawing::centimetersToPixels((float) substr($oNodeFrame->getAttribute('svg:height'), 0, -2)) : 0);
+        $shape->setWidth($oNodeFrame->hasAttribute('svg:width') ? CommonDrawing::centimetersToPixels((float) $this->lengthToCentimeters($oNodeFrame->getAttribute('svg:width'))) : 0);
+        $shape->setHeight($oNodeFrame->hasAttribute('svg:height') ? CommonDrawing::centimetersToPixels((float) $this->lengthToCentimeters($oNodeFrame->getAttribute('svg:height'))) : 0);
         $shape->setResizeProportional(true);
         $this->loadShapeOffset($shape, $oNodeFrame);
 
@@ -1296,7 +1300,7 @@ class ODPresentation implements ReaderInterface
     {
         $point = function (string $attribute) use ($oNodeLine): int {
             return $oNodeLine->hasAttribute($attribute)
-                ? (int) CommonDrawing::centimetersToPixels((float) substr($oNodeLine->getAttribute($attribute), 0, -2))
+                ? (int) CommonDrawing::centimetersToPixels((float) $this->lengthToCentimeters($oNodeLine->getAttribute($attribute)))
                 : 0;
         };
 
@@ -1339,8 +1343,8 @@ class ODPresentation implements ReaderInterface
         $shape->setDescription($this->loadShapeDescription($oNodeFrame));
         $shape->setDecorative($this->loadShapeDecorative($oNodeFrame));
         $shape->setResizeProportional(false);
-        $shape->setWidth(CommonDrawing::centimetersToPixels((float) substr($oNodeFrame->getAttribute('svg:width'), 0, -2)));
-        $shape->setHeight(CommonDrawing::centimetersToPixels((float) substr($oNodeFrame->getAttribute('svg:height'), 0, -2)));
+        $shape->setWidth(CommonDrawing::centimetersToPixels((float) $this->lengthToCentimeters($oNodeFrame->getAttribute('svg:width'))));
+        $shape->setHeight(CommonDrawing::centimetersToPixels((float) $this->lengthToCentimeters($oNodeFrame->getAttribute('svg:height'))));
         $shape->setResizeProportional(true);
         $this->loadShapeOffset($shape, $oNodeFrame);
         $shape->getPlotArea()->setType($chartType);
@@ -1355,16 +1359,16 @@ class ODPresentation implements ReaderInterface
         $shape->getTitle()->setVisible($nodeTitle instanceof DOMElement);
         if ($nodeTitle instanceof DOMElement) {
             $shape->getTitle()->setText($this->loadChartText($xmlReader, $nodeTitle));
-            $shape->getTitle()->setOffsetX(CommonDrawing::centimetersToPixels((float) substr($nodeTitle->getAttribute('svg:x'), 0, -2)));
-            $shape->getTitle()->setOffsetY(CommonDrawing::centimetersToPixels((float) substr($nodeTitle->getAttribute('svg:y'), 0, -2)));
+            $shape->getTitle()->setOffsetX(CommonDrawing::centimetersToPixels((float) $this->lengthToCentimeters($nodeTitle->getAttribute('svg:x'))));
+            $shape->getTitle()->setOffsetY(CommonDrawing::centimetersToPixels((float) $this->lengthToCentimeters($nodeTitle->getAttribute('svg:y'))));
             $shape->getTitle()->setFont($this->loadChartFont($xmlReader, $nodeTitle));
         }
         $nodeLegend = $xmlReader->getElement('chart:legend', $nodeChart);
         $shape->getLegend()->setVisible($nodeLegend instanceof DOMElement);
         if ($nodeLegend instanceof DOMElement) {
             $shape->getLegend()->setPosition(self::CHART_LEGEND_POSITIONS[$nodeLegend->getAttribute('chart:legend-position')] ?? Chart\Legend::POSITION_RIGHT);
-            $shape->getLegend()->setOffsetX(CommonDrawing::centimetersToPixels((float) substr($nodeLegend->getAttribute('svg:x'), 0, -2)));
-            $shape->getLegend()->setOffsetY(CommonDrawing::centimetersToPixels((float) substr($nodeLegend->getAttribute('svg:y'), 0, -2)));
+            $shape->getLegend()->setOffsetX(CommonDrawing::centimetersToPixels((float) $this->lengthToCentimeters($nodeLegend->getAttribute('svg:x'))));
+            $shape->getLegend()->setOffsetY(CommonDrawing::centimetersToPixels((float) $this->lengthToCentimeters($nodeLegend->getAttribute('svg:y'))));
             $shape->getLegend()->setFont($this->loadChartFont($xmlReader, $nodeLegend));
         }
 
@@ -1589,7 +1593,7 @@ class ODPresentation implements ReaderInterface
                 $series->getMarker()->setSymbol($symbol);
             }
             if ($chartProps->hasAttribute('chart:symbol-width')) {
-                $series->getMarker()->setSize((int) round(CommonDrawing::centimetersToPoints((float) substr($chartProps->getAttribute('chart:symbol-width'), 0, -2))));
+                $series->getMarker()->setSize((int) round(CommonDrawing::centimetersToPoints((float) $this->lengthToCentimeters($chartProps->getAttribute('chart:symbol-width')))));
             }
         }
     }
@@ -1732,7 +1736,7 @@ class ODPresentation implements ReaderInterface
         }
         $outline->getFill()->setFillType(Fill::FILL_SOLID)->setStartColor($this->loadChartColor($graphicProps, 'svg:stroke-color'));
         if ($graphicProps->hasAttribute('svg:stroke-width')) {
-            $width = (float) substr($graphicProps->getAttribute('svg:stroke-width'), 0, -2);
+            $width = (float) $this->lengthToCentimeters($graphicProps->getAttribute('svg:stroke-width'));
             $outline->setWidth((int) round($inPoints ? CommonDrawing::centimetersToPoints($width) : CommonDrawing::centimetersToPixels($width)));
         }
 
@@ -1765,8 +1769,8 @@ class ODPresentation implements ReaderInterface
         $shape->setName($oNodeShape->getAttribute('draw:name'));
         $shape->setDescription($this->loadShapeDescription($oNodeShape));
         $shape->setDecorative($this->loadShapeDecorative($oNodeShape));
-        $shape->setWidth(CommonDrawing::centimetersToPixels((float) substr($oNodeShape->getAttribute('svg:width'), 0, -2)));
-        $shape->setHeight(CommonDrawing::centimetersToPixels((float) substr($oNodeShape->getAttribute('svg:height'), 0, -2)));
+        $shape->setWidth(CommonDrawing::centimetersToPixels((float) $this->lengthToCentimeters($oNodeShape->getAttribute('svg:width'))));
+        $shape->setHeight(CommonDrawing::centimetersToPixels((float) $this->lengthToCentimeters($oNodeShape->getAttribute('svg:height'))));
         $this->loadShapeOffset($shape, $oNodeShape);
 
         $text = [];
@@ -1806,24 +1810,24 @@ class ODPresentation implements ReaderInterface
      */
     protected function loadShapeOffset(AbstractShape $shape, DOMElement $oNodeFrame): void
     {
-        $pattern = '/rotate\s*\(\s*(-?[\d.]+)\s*\)\s*translate\s*\(\s*(-?[\d.]+)cm\s+(-?[\d.]+)cm\s*\)/';
+        $pattern = '/rotate\s*\(\s*(-?[\d.]+)\s*\)\s*translate\s*\(\s*(\S+)\s+([^\s)]+)\s*\)/';
         if (1 === preg_match($pattern, $oNodeFrame->getAttribute('draw:transform'), $matches)) {
             $rotation = -(float) $matches[1];
             $halfWidth = CommonDrawing::pixelsToCentimeters($shape->getWidth()) / 2;
             $halfHeight = CommonDrawing::pixelsToCentimeters($shape->getHeight()) / 2;
             $shape->setRotation((int) round(rad2deg($rotation)));
             $shape->setOffsetX((int) round(CommonDrawing::centimetersToPixels(
-                (float) $matches[2] - $halfWidth + $halfWidth * cos($rotation) - $halfHeight * sin($rotation)
+                (float) $this->lengthToCentimeters($matches[2]) - $halfWidth + $halfWidth * cos($rotation) - $halfHeight * sin($rotation)
             )));
             $shape->setOffsetY((int) round(CommonDrawing::centimetersToPixels(
-                (float) $matches[3] - $halfHeight + $halfWidth * sin($rotation) + $halfHeight * cos($rotation)
+                (float) $this->lengthToCentimeters($matches[3]) - $halfHeight + $halfWidth * sin($rotation) + $halfHeight * cos($rotation)
             )));
 
             return;
         }
 
-        $shape->setOffsetX($oNodeFrame->hasAttribute('svg:x') ? CommonDrawing::centimetersToPixels((float) substr($oNodeFrame->getAttribute('svg:x'), 0, -2)) : 0);
-        $shape->setOffsetY($oNodeFrame->hasAttribute('svg:y') ? CommonDrawing::centimetersToPixels((float) substr($oNodeFrame->getAttribute('svg:y'), 0, -2)) : 0);
+        $shape->setOffsetX($oNodeFrame->hasAttribute('svg:x') ? CommonDrawing::centimetersToPixels((float) $this->lengthToCentimeters($oNodeFrame->getAttribute('svg:x'))) : 0);
+        $shape->setOffsetY($oNodeFrame->hasAttribute('svg:y') ? CommonDrawing::centimetersToPixels((float) $this->lengthToCentimeters($oNodeFrame->getAttribute('svg:y'))) : 0);
     }
 
     /**
@@ -1841,8 +1845,8 @@ class ODPresentation implements ReaderInterface
 
         $oShape->setDescription($this->loadShapeDescription($oNodeFrame));
         $oShape->setDecorative($this->loadShapeDecorative($oNodeFrame));
-        $oShape->setWidth($oNodeFrame->hasAttribute('svg:width') ? CommonDrawing::centimetersToPixels((float) substr($oNodeFrame->getAttribute('svg:width'), 0, -2)) : 0);
-        $oShape->setHeight($oNodeFrame->hasAttribute('svg:height') ? CommonDrawing::centimetersToPixels((float) substr($oNodeFrame->getAttribute('svg:height'), 0, -2)) : 0);
+        $oShape->setWidth($oNodeFrame->hasAttribute('svg:width') ? CommonDrawing::centimetersToPixels((float) $this->lengthToCentimeters($oNodeFrame->getAttribute('svg:width'))) : 0);
+        $oShape->setHeight($oNodeFrame->hasAttribute('svg:height') ? CommonDrawing::centimetersToPixels((float) $this->lengthToCentimeters($oNodeFrame->getAttribute('svg:height'))) : 0);
         $this->loadShapeOffset($oShape, $oNodeFrame);
         $placeholderType = self::PLACEHOLDER_TYPE[$oNodeFrame->getAttribute('presentation:class')] ?? null;
         if (null !== $placeholderType) {
@@ -2060,8 +2064,8 @@ class ODPresentation implements ReaderInterface
         $container->addShape($oShape);
         $oShape->setDescription($this->loadShapeDescription($oNodeFrame));
         $oShape->setDecorative($this->loadShapeDecorative($oNodeFrame));
-        $oShape->setWidth($oNodeFrame->hasAttribute('svg:width') ? CommonDrawing::centimetersToPixels((float) substr($oNodeFrame->getAttribute('svg:width'), 0, -2)) : 0);
-        $oShape->setHeight($oNodeFrame->hasAttribute('svg:height') ? CommonDrawing::centimetersToPixels((float) substr($oNodeFrame->getAttribute('svg:height'), 0, -2)) : 0);
+        $oShape->setWidth($oNodeFrame->hasAttribute('svg:width') ? CommonDrawing::centimetersToPixels((float) $this->lengthToCentimeters($oNodeFrame->getAttribute('svg:width'))) : 0);
+        $oShape->setHeight($oNodeFrame->hasAttribute('svg:height') ? CommonDrawing::centimetersToPixels((float) $this->lengthToCentimeters($oNodeFrame->getAttribute('svg:height'))) : 0);
         $this->loadShapeOffset($oShape, $oNodeFrame);
 
         // A drawing table says which of its rows are styled apart with these two flags, which are
@@ -2187,6 +2191,22 @@ class ODPresentation implements ReaderInterface
         return (int) round(((float) rtrim($position, '%')) * 1000);
     }
 
+    /**
+     * The centimetres an ODF `length` stands for, in whichever of its units it is written and
+     * with its sign. What is not a length -- a percentage, `normal`, a number without a unit --
+     * gives `null`.
+     */
+    protected function lengthToCentimeters(string $value): ?float
+    {
+        // a pixel is the 96th of an inch, as it is for LibreOffice
+        $units = ['cm' => 1, 'mm' => 0.1, 'in' => 2.54, 'pt' => 2.54 / 72, 'pc' => 2.54 / 6, 'px' => 2.54 / CommonDrawing::DPI_96];
+        if (1 !== preg_match('/^\s*(-?(?:\d+\.?\d*|\.\d+))(cm|mm|in|pt|pc|px)\s*$/i', $value, $matches)) {
+            return null;
+        }
+
+        return (float) $matches[1] * $units[strtolower($matches[2])];
+    }
+
     private function getExpressionUnit(string $expr): string
     {
         if (substr($expr, -1) == '%') {
@@ -2194,15 +2214,6 @@ class ODPresentation implements ReaderInterface
         }
 
         return substr($expr, -2);
-    }
-
-    private function getExpressionValue(string $expr): string
-    {
-        if (substr($expr, -1) == '%') {
-            return substr($expr, 0, -1);
-        }
-
-        return substr($expr, 0, -2);
     }
 
     /**
