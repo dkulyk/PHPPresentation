@@ -23,9 +23,11 @@ namespace PhpOffice\PhpPresentation\Writer\PowerPoint2007;
 use PhpOffice\Common\Adapter\Zip\ZipInterface;
 use PhpOffice\Common\Drawing as CommonDrawing;
 use PhpOffice\Common\XMLWriter;
+use PhpOffice\PhpPresentation\AbstractShape;
 use PhpOffice\PhpPresentation\Shape\Chart as ShapeChart;
 use PhpOffice\PhpPresentation\Shape\Comment;
 use PhpOffice\PhpPresentation\Shape\Drawing as ShapeDrawing;
+use PhpOffice\PhpPresentation\Shape\Group;
 use PhpOffice\PhpPresentation\Shape\Hyperlink;
 use PhpOffice\PhpPresentation\Shape\Media;
 use PhpOffice\PhpPresentation\ShapeContainerInterface;
@@ -318,6 +320,23 @@ class PptSlides extends AbstractSlide
         return $objWriter->getData();
     }
 
+    /**
+     * Map each shape to the id writeShapeCollection() gives it, which counts the shapes of a group
+     * too. The key is the object, not `getHashCode()`, which two shapes alike share.
+     *
+     * @param iterable<AbstractShape> $shapes
+     * @param array<int, int> $shapeIds
+     */
+    protected function mapShapeIds(iterable $shapes, int &$shapeId, array &$shapeIds): void
+    {
+        foreach ($shapes as $shape) {
+            $shapeIds[spl_object_id($shape)] = ++$shapeId;
+            if ($shape instanceof Group) {
+                $this->mapShapeIds($shape->getShapeCollection(), $shapeId, $shapeIds);
+            }
+        }
+    }
+
     protected function writeSlideAnimations(XMLWriter $objWriter, Slide $oSlide): void
     {
         $arrayAnimations = $oSlide->getAnimations();
@@ -328,15 +347,13 @@ class PptSlides extends AbstractSlide
         // Variables
         $shapeId = 1;
         $idCount = 1;
-        $hashToIdMap = [];
+        $shapeIds = [];
         $arrayAnimationIds = [];
 
-        foreach ($oSlide->getShapeCollection() as $shape) {
-            $hashToIdMap[$shape->getHashCode()] = ++$shapeId;
-        }
+        $this->mapShapeIds($oSlide->getShapeCollection(), $shapeId, $shapeIds);
         foreach ($arrayAnimations as $oAnimation) {
             foreach ($oAnimation->getShapeCollection() as $oShape) {
-                $arrayAnimationIds[] = $hashToIdMap[$oShape->getHashCode()];
+                $arrayAnimationIds[] = $shapeIds[spl_object_id($oShape)];
             }
         }
 
@@ -404,7 +421,7 @@ class PptSlides extends AbstractSlide
             $firstAnimation = true;
             foreach ($oAnimation->getShapeCollection() as $oShape) {
                 $nodeType = $firstAnimation ? 'clickEffect' : 'withEffect';
-                $shapeId = $hashToIdMap[$oShape->getHashCode()];
+                $shapeId = $shapeIds[spl_object_id($oShape)];
 
                 // p:par
                 $objWriter->startElement('p:par');
