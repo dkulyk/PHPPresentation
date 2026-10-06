@@ -1998,27 +1998,99 @@ class ODPresentationTest extends TestCase
         $oTable->createRow()->getCell(0)->setColSpan(3);
         $oTable->getRow(0)->getCell(3)->createTextRun('last');
 
+        // The two covered cells as one repeated cell, which ODF allows
+        $oTableRead = $this->readTableWithContent(
+            $oPhpPresentation,
+            '#<table:covered-table-cell/><table:covered-table-cell/>#',
+            '<table:covered-table-cell table:number-columns-repeated="2"/>'
+        );
+        self::assertEquals([[' 3x0', ' 0x0', ' 0x0', 'last 0x0']], $this->getTableSpans($oTableRead));
+    }
+
+    public function testTableRepeatedCellsWithText(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oRow = $oPhpPresentation->getActiveSlide()->createTableShape(3)->createRow();
+        $oRow->getCell(0)->createTextRun('same');
+        $oRow->getCell(0)->getFill()->setFillType(Fill::FILL_SOLID)->setStartColor(new Color('FF00FF00'));
+        $oRow->getCell(2)->createTextRun('last');
+
+        // A repeated cell stands for as many cells with the same text and the same style
+        $oTableRead = $this->readTableWithContent(
+            $oPhpPresentation,
+            '#(<table:table-cell)(.*?</table:table-cell>)<table:table-cell.*?</table:table-cell>#s',
+            '$1 table:number-columns-repeated="2"$2'
+        );
+        self::assertEquals([['same 0x0', 'same 0x0', 'last 0x0']], $this->getTableSpans($oTableRead));
+        self::assertEquals('FF00FF00', $oTableRead->getRow(0)->getCell(1)->getFill()->getStartColor()->getARGB());
+    }
+
+    public function testTableRepeatedCellsPastTheLastColumn(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oPhpPresentation->getActiveSlide()->createTableShape(3)->createRow()->getCell(0)->createTextRun('same');
+
+        // A run that is longer than the row stops at the last column
+        $oTableRead = $this->readTableWithContent($oPhpPresentation, '#<table:table-cell#', '$0 table:number-columns-repeated="5"');
+        self::assertEquals([['same 0x0', 'same 0x0', 'same 0x0']], $this->getTableSpans($oTableRead));
+    }
+
+    public function testTableInACellIsNotPartOfTheTable(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oPhpPresentation->getActiveSlide()->createTableShape(2)->createRow()->getCell(0)->createTextRun('outer');
+
+        // The columns and the rows of a table inside a cell are not those of the table around it
+        $oTableRead = $this->readTableWithContent(
+            $oPhpPresentation,
+            '#</table:table-cell>#',
+            '<table:table><table:table-column/><table:table-column/><table:table-row><table:table-cell/><table:table-cell/></table:table-row></table:table>$0'
+        );
+        self::assertEquals([['outer 0x0', ' 0x0']], $this->getTableSpans($oTableRead));
+    }
+
+    public function testTableGroupedRowsAndColumns(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oTable = $oPhpPresentation->getActiveSlide()->createTableShape(2);
+        $oTable->createRow()->getCell(1)->createTextRun('header');
+        $oTable->createRow()->getCell(1)->createTextRun('body');
+
+        // The columns and the rows inside the elements ODF groups them with
+        $oTableRead = $this->readTableWithContent(
+            $oPhpPresentation,
+            '#<table:table-column/><table:table-column/>(<table:table-row.*?</table:table-row>)(<table:table-row)(.*?</table:table-row>)#s',
+            '<table:table-columns><table:table-column table:number-columns-repeated="2"/></table:table-columns>'
+                . '<table:table-header-rows>$1</table:table-header-rows>'
+                . '<table:table-row-group><table:table-rows>$2$3</table:table-rows></table:table-row-group>'
+        );
+        self::assertEquals([
+            [' 0x0', 'header 0x0'],
+            [' 0x0', 'body 0x0'],
+        ], $this->getTableSpans($oTableRead));
+    }
+
+    /**
+     * Save a presentation, rewrite its `content.xml` and read back the table of its first slide.
+     */
+    private function readTableWithContent(PhpPresentation $oPhpPresentation, string $pattern, string $replacement): Table
+    {
         $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
         (new ODPresentationWriter($oPhpPresentation))->save($file);
-        // The two covered cells as one repeated cell, which ODF allows
         $oZip = new ZipArchive();
         $oZip->open($file);
         $content = (string) $oZip->getFromName('content.xml');
-        $repeated = str_replace(
-            '<table:covered-table-cell/><table:covered-table-cell/>',
-            '<table:covered-table-cell table:number-columns-repeated="2"/>',
-            $content
-        );
-        self::assertNotEquals($content, $repeated);
-        $oZip->addFromString('content.xml', $repeated);
+        $rewritten = (string) preg_replace($pattern, $replacement, $content, 1);
+        self::assertNotEquals($content, $rewritten);
+        $oZip->addFromString('content.xml', $rewritten);
         $oZip->close();
         $oPhpPresentationRead = (new ODPresentation())->load($file);
         unlink($file);
 
         $arrayShape = array_values((array) $oPhpPresentationRead->getActiveSlide()->getShapeCollection());
-        $oTableRead = $arrayShape[0];
-        self::assertInstanceOf(Table::class, $oTableRead);
-        self::assertEquals([[' 3x0', ' 0x0', ' 0x0', 'last 0x0']], $this->getTableSpans($oTableRead));
+        self::assertInstanceOf(Table::class, $arrayShape[0]);
+
+        return $arrayShape[0];
     }
 
     /**
