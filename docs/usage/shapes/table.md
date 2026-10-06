@@ -124,6 +124,18 @@ $cellA1->getActiveParagraph()->getAlignment()
     ->setMarginTop(80);
 ```
 
+The vertical alignment of the first paragraph is where the text of the cell sits between its top and its bottom.
+
+``` php
+<?php
+
+use PhpOffice\PhpPresentation\Style\Alignment;
+
+$cellA1->getActiveParagraph()->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+```
+
+The PowerPoint2007 and the ODPresentation Writers both write the margins and the vertical alignment of a cell, and their Readers read them back.
+
 ### Define the borders
 For defining the borders of a cell, you can use the `getBorders` method of a Cell object.
 
