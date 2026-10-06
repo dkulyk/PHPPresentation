@@ -205,7 +205,7 @@ notes list.
 34. No italic; pt size written as px.
 35. Small caps written as lowercase.
 36. Static placeholder text, not computed.
-37. Date/time format not written.
+37. Formats datetime4, 6 and 7 written as the nearest one.
 38. Static placeholder text, not computed.
 39. No vertical text; autofit as auto-grow.
 40. Colspan only; spanned cells still emitted.
