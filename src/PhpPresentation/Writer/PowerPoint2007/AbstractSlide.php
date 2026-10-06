@@ -560,8 +560,11 @@ abstract class AbstractSlide extends AbstractDecoratorWriter
                     $objWriter->writeAttributeIf(isset($hMerge[$row][$cell]), 'hMerge', '1');
                     $objWriter->writeAttributeIf(isset($vMerge[$row][$cell]), 'vMerge', '1');
                 } else {
-                    $objWriter->writeAttributeIf($currentCell->getColSpan() > 1, 'gridSpan', $currentCell->getColSpan());
-                    $objWriter->writeAttributeIf($currentCell->getRowSpan() > 1, 'rowSpan', $currentCell->getRowSpan());
+                    // LibreOffice drops a span that reaches past the table, so it stops at the edge
+                    $colSpan = min($currentCell->getColSpan(), $countCells - $cell);
+                    $rowSpan = min($currentCell->getRowSpan(), $countRows - $row);
+                    $objWriter->writeAttributeIf($colSpan > 1, 'gridSpan', $colSpan);
+                    $objWriter->writeAttributeIf($rowSpan > 1, 'rowSpan', $rowSpan);
                 }
                 // a:txBody
                 $objWriter->startElement('a:txBody');

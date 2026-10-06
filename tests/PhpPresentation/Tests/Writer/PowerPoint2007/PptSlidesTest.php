@@ -1997,7 +1997,11 @@ class PptSlidesTest extends PhpPresentationTestCase
             'two spans in a row' => [[[0, 0, 2, 0], [0, 2, 2, 0]], ['gridSpan=2 hMerge=1 gridSpan=2 hMerge=1', '- - - -', '- - - -']],
             'a span on a cell a span covers' => [[[0, 0, 2, 0], [0, 1, 2, 0]], ['gridSpan=2 hMerge=1 - -', '- - - -', '- - - -']],
             'a row span on a cell a row span covers' => [[[0, 0, 0, 2], [1, 0, 0, 2]], ['rowSpan=2 - - -', 'vMerge=1 - - -', '- - - -']],
+            'a span far past the table' => [[[0, 0, 2000000000, 2000000000]], ['gridSpan=4,rowSpan=3 hMerge=1 hMerge=1 hMerge=1', 'vMerge=1 hMerge=1,vMerge=1 hMerge=1,vMerge=1 hMerge=1,vMerge=1', 'vMerge=1 hMerge=1,vMerge=1 hMerge=1,vMerge=1 hMerge=1,vMerge=1']],
             'a block' => [[[0, 1, 2, 2]], ['- gridSpan=2,rowSpan=2 hMerge=1 -', '- vMerge=1 hMerge=1,vMerge=1 -', '- - - -']],
+            'a span past the last column' => [[[0, 2, 5, 0]], ['- - gridSpan=2 hMerge=1', '- - - -', '- - - -']],
+            'a span past the last row' => [[[1, 0, 0, 5]], ['- - - -', 'rowSpan=2 - - -', 'vMerge=1 - - -']],
+            'a span on the last cell' => [[[2, 3, 3, 3]], ['- - - -', '- - - -', '- - - -']],
         ];
     }
 

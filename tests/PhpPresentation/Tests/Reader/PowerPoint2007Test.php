@@ -2063,6 +2063,41 @@ class PowerPoint2007Test extends TestCase
         self::assertEquals(['2x2', '0x0', '2x0', '0x0', '0x0', '0x0', '0x0', '0x0'], $spans);
     }
 
+    public function testTableSpansOnCoveredCells(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oTable = $oPhpPresentation->getActiveSlide()->createTableShape(2);
+        $oTable->createRow()->getCell(0)->setColSpan(2)->setRowSpan(2);
+        $oTable->createRow();
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new PowerPoint2007Writer($oPhpPresentation))->save($file);
+        // PowerPoint repeats the span of the first cell on the cells it covers
+        $oZip = new ZipArchive();
+        $oZip->open($file);
+        $sSlide = (string) $oZip->getFromName('ppt/slides/slide1.xml');
+        self::assertStringContainsString('<a:tc hMerge="1">', $sSlide);
+        self::assertStringContainsString('<a:tc vMerge="1">', $sSlide);
+        $oZip->addFromString('ppt/slides/slide1.xml', str_replace(
+            ['<a:tc hMerge="1">', '<a:tc vMerge="1">'],
+            ['<a:tc rowSpan="2" hMerge="1">', '<a:tc gridSpan="2" vMerge="true">'],
+            $sSlide
+        ));
+        $oZip->close();
+        $oPhpPresentationRead = (new PowerPoint2007())->load($file);
+        unlink($file);
+
+        $oTableRead = $oPhpPresentationRead->getActiveSlide()->getShapeCollection()[0];
+        self::assertInstanceOf(Table::class, $oTableRead);
+        $spans = [];
+        foreach ($oTableRead->getRows() as $oRowRead) {
+            foreach ($oRowRead->getCells() as $oCell) {
+                $spans[] = $oCell->getColSpan() . 'x' . $oCell->getRowSpan();
+            }
+        }
+        self::assertEquals(['2x2', '0x0', '0x0', '0x0'], $spans);
+    }
+
     /**
      * @return array<array{string, string}>
      */
