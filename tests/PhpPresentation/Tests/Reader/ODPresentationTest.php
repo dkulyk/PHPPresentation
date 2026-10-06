@@ -2773,6 +2773,51 @@ class ODPresentationTest extends TestCase
         self::assertSame($expected, $actual);
     }
 
+    public function testWhitespaceSurvivesTheRoundTrip(): void
+    {
+        $text = "two   spaces\ttab";
+        $oPhpPresentation = new PhpPresentation();
+        $oSlide = $oPhpPresentation->getActiveSlide();
+        $oShape = $oSlide->createRichTextShape();
+        $oShape->createTextRun($text);
+        $oShape->createTextRun(' lead ');
+        $oShape->createTextRun("line\nfeed");
+        $oShape->createParagraph()->getBulletStyle()->setBulletType(Bullet::TYPE_BULLET);
+        $oShape->createTextRun($text);
+        $oSlide->createTableShape()->createRow()->getCell()->createTextRun($text);
+        $oSlide->addShape((new AutoShape())->setType(AutoShape::TYPE_HEART)->setText($text . "\n lead"));
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new ODPresentationWriter($oPhpPresentation))->save($file);
+
+        // LibreOffice writes a line of a shape as a line break as well
+        $oZip = new ZipArchive();
+        $oZip->open($file);
+        $content = preg_replace('#(two <text:s text:c="2"/>spaces<text:tab/>tab)</text:p><text:p[^>]*>#', '$1<text:line-break/>', (string) $oZip->getFromName('content.xml'), -1, $count);
+        $oZip->addFromString('content.xml', (string) $content);
+        $oZip->close();
+        self::assertEquals(1, $count);
+        $oPhpPresentationRead = (new ODPresentation())->load($file);
+        unlink($file);
+
+        // Written as characters, LibreOffice reads the spaces as one, the tab and the line feed as
+        // a space; written as elements, they are what they were, a line feed a line break
+        $arrayShape = array_values((array) $oPhpPresentationRead->getActiveSlide()->getShapeCollection());
+        self::assertInstanceOf(RichText::class, $arrayShape[0]);
+        $arrayElements = $arrayShape[0]->getParagraph(0)->getRichTextElements();
+        self::assertCount(5, $arrayElements);
+        self::assertSame($text, $arrayElements[0]->getText());
+        self::assertSame(' lead ', $arrayElements[1]->getText());
+        self::assertSame('line', $arrayElements[2]->getText());
+        self::assertInstanceOf(RichText\BreakElement::class, $arrayElements[3]);
+        self::assertSame('feed', $arrayElements[4]->getText());
+        self::assertSame($text, $arrayShape[0]->getParagraph(1)->getPlainText());
+        self::assertInstanceOf(Table::class, $arrayShape[1]);
+        self::assertSame($text, $arrayShape[1]->getRow(0)->getCell(0)->getPlainText());
+        self::assertInstanceOf(AutoShape::class, $arrayShape[2]);
+        self::assertSame($text . "\n lead", $arrayShape[2]->getText());
+    }
+
     public function testGroupSurvivesTheRoundTrip(): void
     {
         $oPhpPresentation = new PhpPresentation();
