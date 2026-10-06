@@ -42,6 +42,24 @@ class PptCommentsTest extends PhpPresentationTestCase
         $this->assertIsSchemaECMA376Valid();
     }
 
+    public function testCommentsAreNumberedByAuthorThroughThePresentation(): void
+    {
+        $oAuthorAlice = (new Comment\Author())->setName('Alice');
+        $oAuthorBob = (new Comment\Author())->setName('Bob');
+        $oSlide = $this->oPresentation->createSlide();
+        $this->oPresentation->getActiveSlide()->addShape((new Comment())->setAuthor($oAuthorAlice));
+        $this->oPresentation->getActiveSlide()->addShape((new Comment())->setAuthor($oAuthorBob));
+        $oSlide->addShape((new Comment())->setAuthor($oAuthorAlice));
+
+        $this->assertZipXmlAttributeEquals('ppt/comments/comment1.xml', '/p:cmLst/p:cm[1]', 'idx', 1);
+        $this->assertZipXmlAttributeEquals('ppt/comments/comment1.xml', '/p:cmLst/p:cm[2]', 'idx', 1);
+        $this->assertZipXmlAttributeEquals('ppt/comments/comment2.xml', '/p:cmLst/p:cm', 'idx', 2);
+        $this->assertZipXmlAttributeEquals('ppt/commentAuthors.xml', '/p:cmAuthorLst/p:cmAuthor[1]', 'lastIdx', 2);
+        $this->assertZipXmlAttributeEquals('ppt/commentAuthors.xml', '/p:cmAuthorLst/p:cmAuthor[2]', 'lastIdx', 1);
+        $this->assertZipXmlAttributeEquals('ppt/commentAuthors.xml', '/p:cmAuthorLst/p:cmAuthor[2]', 'clrIdx', 1);
+        $this->assertIsSchemaECMA376Valid();
+    }
+
     public function testWithoutComment(): void
     {
         $this->assertZipFileNotExists('ppt/comments/comment1.xml');
