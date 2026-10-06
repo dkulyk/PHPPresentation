@@ -1018,70 +1018,40 @@ class ODPresentation implements ReaderInterface
                     break;
             }
         }
-        // Font Latin
-        if ($nodeTextProperties->hasAttribute('fo:font-family')) {
-            $oFont
-                ->setName($nodeTextProperties->getAttribute('fo:font-family'))
-                ->setFormat(Font::FORMAT_LATIN);
+        // The family, the size, the weight and the slant are spelled once per script, and a font
+        // holds those of one: the script `style:script-type` names, else the first one the style
+        // says anything for. LibreOffice writes all three.
+        $suffixes = [Font::FORMAT_LATIN => '', Font::FORMAT_EAST_ASIAN => '-asian', Font::FORMAT_COMPLEX_SCRIPT => '-complex'];
+        $read = function (string $name, array $suffixes) use ($nodeTextProperties): string {
+            foreach ($suffixes as $suffix) {
+                $value = $nodeTextProperties->getAttribute(('' === $suffix ? 'fo:' : 'style:') . $name . $suffix);
+                if ('' !== $value) {
+                    return $value;
+                }
+            }
+
+            return '';
+        };
+        $scriptTypes = ['latin' => Font::FORMAT_LATIN, 'asian' => Font::FORMAT_EAST_ASIAN, 'complex' => Font::FORMAT_COMPLEX_SCRIPT];
+        $format = $scriptTypes[$nodeTextProperties->getAttribute('style:script-type')] ?? null;
+        foreach ($suffixes as $script => $suffix) {
+            if (null === $format && '' !== $read('font-family', [$suffix]) . $read('font-size', [$suffix]) . $read('font-weight', [$suffix]) . $read('font-style', [$suffix])) {
+                $format = $script;
+            }
         }
-        if ($nodeTextProperties->hasAttribute('fo:font-weight') && 'bold' == $nodeTextProperties->getAttribute('fo:font-weight')) {
-            $oFont
-                ->setBold(true)
-                ->setFormat(Font::FORMAT_LATIN);
+        if (null !== $format) {
+            $oFont->setFormat($format);
+            // what the script of the font does not say is taken from the next one that does
+            $suffixes = [$format => $suffixes[$format]] + $suffixes;
         }
-        if ($nodeTextProperties->hasAttribute('fo:font-size')) {
-            $oFont
-                ->setSize((int) substr($nodeTextProperties->getAttribute('fo:font-size'), 0, -2))
-                ->setFormat(Font::FORMAT_LATIN);
+        if ('' !== $read('font-family', $suffixes)) {
+            $oFont->setName($read('font-family', $suffixes));
         }
-        // Font East Asian
-        if ($nodeTextProperties->hasAttribute('style:font-family-asian')) {
-            $oFont
-                ->setName($nodeTextProperties->getAttribute('style:font-family-asian'))
-                ->setFormat(Font::FORMAT_EAST_ASIAN);
+        if ('' !== $read('font-size', $suffixes)) {
+            $oFont->setSize((int) substr($read('font-size', $suffixes), 0, -2));
         }
-        if ($nodeTextProperties->hasAttribute('style:font-weight-asian') && 'bold' == $nodeTextProperties->getAttribute('style:font-weight-asian')) {
-            $oFont
-                ->setBold(true)
-                ->setFormat(Font::FORMAT_EAST_ASIAN);
-        }
-        if ($nodeTextProperties->hasAttribute('style:font-size-asian')) {
-            $oFont
-                ->setSize((int) substr($nodeTextProperties->getAttribute('style:font-size-asian'), 0, -2))
-                ->setFormat(Font::FORMAT_EAST_ASIAN);
-        }
-        // Font Complex Script
-        if ($nodeTextProperties->hasAttribute('style:font-family-complex')) {
-            $oFont
-                ->setName($nodeTextProperties->getAttribute('style:font-family-complex'))
-                ->setFormat(Font::FORMAT_COMPLEX_SCRIPT);
-        }
-        if ($nodeTextProperties->hasAttribute('style:font-weight-complex') && 'bold' == $nodeTextProperties->getAttribute('style:font-weight-complex')) {
-            $oFont
-                ->setBold(true)
-                ->setFormat(Font::FORMAT_COMPLEX_SCRIPT);
-        }
-        if ($nodeTextProperties->hasAttribute('style:font-size-complex')) {
-            $oFont
-                ->setSize((int) substr($nodeTextProperties->getAttribute('style:font-size-complex'), 0, -2))
-                ->setFormat(Font::FORMAT_COMPLEX_SCRIPT);
-        }
-        // Italic, spelled once per script the way the family, the size and the weight are
-        if ('italic' == $nodeTextProperties->getAttribute('fo:font-style')) {
-            $oFont
-                ->setItalic(true)
-                ->setFormat(Font::FORMAT_LATIN);
-        }
-        if ('italic' == $nodeTextProperties->getAttribute('style:font-style-asian')) {
-            $oFont
-                ->setItalic(true)
-                ->setFormat(Font::FORMAT_EAST_ASIAN);
-        }
-        if ('italic' == $nodeTextProperties->getAttribute('style:font-style-complex')) {
-            $oFont
-                ->setItalic(true)
-                ->setFormat(Font::FORMAT_COMPLEX_SCRIPT);
-        }
+        $oFont->setBold('bold' == $read('font-weight', $suffixes));
+        $oFont->setItalic('italic' == $read('font-style', $suffixes));
         // Underline and strikethrough, one family each for the whole run
         $underlineStyle = $nodeTextProperties->getAttribute('style:text-underline-style');
         if ('' !== $underlineStyle && 'none' !== $underlineStyle) {
@@ -1108,22 +1078,6 @@ class ODPresentation implements ReaderInterface
         $textPosition = $nodeTextProperties->getAttribute('style:text-position');
         if ('' !== $textPosition) {
             $oFont->setBaseline($this->baselineFromTextPosition($textPosition));
-        }
-        if ($nodeTextProperties->hasAttribute('style:script-type')) {
-            switch ($nodeTextProperties->getAttribute('style:script-type')) {
-                case 'latin':
-                    $oFont->setFormat(Font::FORMAT_LATIN);
-
-                    break;
-                case 'asian':
-                    $oFont->setFormat(Font::FORMAT_EAST_ASIAN);
-
-                    break;
-                case 'complex':
-                    $oFont->setFormat(Font::FORMAT_COMPLEX_SCRIPT);
-
-                    break;
-            }
         }
 
         return $oFont;
