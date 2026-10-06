@@ -238,7 +238,7 @@ model, with the exceptions its notes list.
 46. No autofit, no vertical text.
 47. Insets only; no autofit/wrap/columns/direction.
 48. No autofit, columns, vertical text.
-49. Cell fill solid only.
+49. Cell fill none and solid only.
 50. Row heights only.
 51. Gap width and overlap not read.
 52. View3D, gap width not read.

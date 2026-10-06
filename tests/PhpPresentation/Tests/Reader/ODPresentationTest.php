@@ -2151,6 +2151,45 @@ class ODPresentationTest extends TestCase
         self::assertEqualsWithDelta(7.5591, $oAlignment->getMarginTop(), 0.0001);
     }
 
+    public function testTableCellFillSurvivesTheRoundTrip(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oRow = $oPhpPresentation->getActiveSlide()->createTableShape(3)->createRow();
+        $oRow->getCell(1)->getFill()->setFillType(Fill::FILL_NONE);
+        $oRow->getCell(2)->getFill()->setFillType(Fill::FILL_SOLID)->setStartColor(new Color('FF00FF00'));
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new ODPresentationWriter($oPhpPresentation))->save($file);
+        $oPhpPresentationRead = (new ODPresentation())->load($file);
+        unlink($file);
+
+        $oTableRead = array_values((array) $oPhpPresentationRead->getActiveSlide()->getShapeCollection())[0];
+        self::assertInstanceOf(Table::class, $oTableRead);
+        // A fill never asked for and a fill refused are two states, and both come back
+        $oRowRead = $oTableRead->getRow(0);
+        self::assertEquals(Fill::FILL_UNSET, $oRowRead->getCell(0)->getFill()->getFillType());
+        self::assertEquals(Fill::FILL_NONE, $oRowRead->getCell(1)->getFill()->getFillType());
+        self::assertEquals(Fill::FILL_SOLID, $oRowRead->getCell(2)->getFill()->getFillType());
+        self::assertEquals('FF00FF00', $oRowRead->getCell(2)->getFill()->getStartColor()->getARGB());
+    }
+
+    public function testTableCellFillWrittenAsGraphicProperties(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oRow = $oPhpPresentation->getActiveSlide()->createTableShape(1)->createRow();
+        $oRow->getCell(0)->getFill()->setFillType(Fill::FILL_SOLID)->setStartColor(new Color('FF00FF00'));
+
+        // The fill where this Writer put it before, which a file it wrote then still has
+        $oTableRead = $this->readTableWithContent(
+            $oPhpPresentation,
+            '~(<style:table-cell-properties) fo:background-color="#00FF00"~',
+            '<style:graphic-properties draw:fill="solid" draw:fill-color="#00FF00"/>$1'
+        );
+        $oFill = $oTableRead->getRow(0)->getCell(0)->getFill();
+        self::assertEquals(Fill::FILL_SOLID, $oFill->getFillType());
+        self::assertEquals('FF00FF00', $oFill->getStartColor()->getARGB());
+    }
+
     /**
      * Save a presentation, rewrite its `content.xml` and read back the table of its first slide.
      */
