@@ -1452,6 +1452,78 @@ class ContentTest extends PhpPresentationTestCase
         $this->assertIsSchemaOpenDocumentValid('1.2');
     }
 
+    /**
+     * @return array<array<string>>
+     */
+    public static function dataProviderFieldDataStyle(): array
+    {
+        return [
+            [Field::TYPE_DATETIME, 'text:date', 'number:date-style', 'D1'],
+            ['datetime3', 'text:date', 'number:date-style', 'D6'],
+            // LibreOffice has no style for this one, and gives it the one of `datetime3`
+            ['datetime4', 'text:date', 'number:date-style', 'D6'],
+            ['datetime11', 'text:time', 'number:time-style', 'T3'],
+            ['datetime12', 'text:time', 'number:time-style', 'T5'],
+        ];
+    }
+
+    /**
+     * @dataProvider dataProviderFieldDataStyle
+     */
+    #[DataProvider('dataProviderFieldDataStyle')]
+    public function testRichTextFieldDataStyle(string $type, string $expectedElement, string $expectedStyle, string $expectedName): void
+    {
+        $oParagraph = $this->oPresentation->getActiveSlide()->createRichTextShape()->getActiveParagraph();
+        $oParagraph->createField($type, '7');
+        // the same format twice is one style
+        $oParagraph->createField($type, '7');
+
+        $element = '/office:document-content/office:body/office:presentation/draw:page/draw:frame/draw:text-box/text:p/text:span/' . $expectedElement;
+        $this->assertZipXmlAttributeEquals('content.xml', $element, 'style:data-style-name', $expectedName);
+        $this->assertZipXmlElementCount('content.xml', '/office:document-content/office:automatic-styles/' . $expectedStyle, 1);
+        $this->assertZipXmlElementExists('content.xml', '/office:document-content/office:automatic-styles/' . $expectedStyle . '[@style:name="' . $expectedName . '"]');
+        // before the text styles, which share their names with it
+        $this->assertZipXmlElementExists('content.xml', '/office:document-content/office:automatic-styles/style:style[@style:family="text"]');
+        $this->assertZipXmlElementNotExists('content.xml', '/office:document-content/office:automatic-styles/' . $expectedStyle . '[preceding-sibling::style:style]');
+        $this->assertIsSchemaOpenDocumentValid('1.2');
+    }
+
+    public function testRichTextFieldWithHyperlinkHasNoDataStyle(): void
+    {
+        $oParagraph = $this->oPresentation->getActiveSlide()->createRichTextShape()->getActiveParagraph();
+        $oParagraph->createField('datetime13', '7')->getHyperlink()->setUrl('https://github.com/PHPOffice/PHPPresentation/');
+
+        // it is written as the link, which names no data style
+        $this->assertZipXmlElementExists('content.xml', '/office:document-content/office:body/office:presentation/draw:page/draw:frame/draw:text-box/text:p/text:span/text:a');
+        $this->assertZipXmlElementNotExists('content.xml', '/office:document-content/office:automatic-styles/number:time-style');
+        $this->assertIsSchemaOpenDocumentValid('1.2');
+    }
+
+    public function testRichTextFieldDateAndTime(): void
+    {
+        $oParagraph = $this->oPresentation->getActiveSlide()->createRichTextShape()->getActiveParagraph();
+        $oParagraph->createField('datetime9', '7');
+
+        // OpenDocument has no field for the two together, and LibreOffice writes one of each
+        $element = '/office:document-content/office:body/office:presentation/draw:page/draw:frame/draw:text-box/text:p/text:span';
+        $this->assertZipXmlElementEquals('content.xml', $element . '/text:date', '7');
+        $this->assertZipXmlAttributeEquals('content.xml', $element . '/text:date', 'style:data-style-name', 'D4');
+        $this->assertZipXmlAttributeEquals('content.xml', $element . '/text:time', 'style:data-style-name', 'T6');
+        $this->assertZipXmlElementExists('content.xml', '/office:document-content/office:automatic-styles/number:date-style[@style:name="D4"]');
+        $this->assertZipXmlElementExists('content.xml', '/office:document-content/office:automatic-styles/number:time-style[@style:name="T6"]');
+        $this->assertIsSchemaOpenDocumentValid('1.2');
+    }
+
+    public function testRichTextFieldFileDisplay(): void
+    {
+        $oParagraph = $this->oPresentation->getActiveSlide()->createRichTextShape()->getActiveParagraph();
+        $oParagraph->createField('file2', 'deck');
+
+        $element = '/office:document-content/office:body/office:presentation/draw:page/draw:frame/draw:text-box/text:p/text:span/text:file-name';
+        $this->assertZipXmlAttributeEquals('content.xml', $element, 'text:display', 'name');
+        $this->assertIsSchemaOpenDocumentValid('1.2');
+    }
+
     public function testRichTextFieldSlideCount(): void
     {
         $oParagraph = $this->oPresentation->getActiveSlide()->createRichTextShape()->getActiveParagraph();
