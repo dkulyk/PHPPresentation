@@ -25,6 +25,7 @@ class Placeholder
     /** Placeholder Type constants */
     public const PH_TYPE_BODY = 'body';
     public const PH_TYPE_CHART = 'chart';
+    public const PH_TYPE_CTRTITLE = 'ctrTitle';
     public const PH_TYPE_SUBTITLE = 'subTitle';
     public const PH_TYPE_TITLE = 'title';
     public const PH_TYPE_FOOTER = 'ftr';
