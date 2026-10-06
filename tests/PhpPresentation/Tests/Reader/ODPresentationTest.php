@@ -165,7 +165,10 @@ class ODPresentationTest extends TestCase
         self::assertEquals(Paragraph::LINE_SPACING_MODE_PERCENT, $oParagraph->getLineSpacingMode());
         self::assertEquals(100, $oParagraph->getLineSpacing());
         $arrayRichText = $oParagraph->getRichTextElements();
-        self::assertCount(3, $arrayRichText);
+        // the file is indented: the white space around the span of the line break is a space each
+        self::assertCount(5, $arrayRichText);
+        self::assertSame(' ', $arrayRichText[1]->getText());
+        self::assertSame(' ', $arrayRichText[3]->getText());
         // Slide 1 : Shape 2 : Paragraph 1
         $oRichText = $arrayRichText[0];
         self::assertInstanceOf('PhpOffice\\PhpPresentation\\Shape\\RichText\\Run', $oRichText);
@@ -177,10 +180,10 @@ class ODPresentationTest extends TestCase
         self::assertEquals(Font::FORMAT_LATIN, $oRichText->getFont()->getFormat());
         self::assertEquals(Font::CAPITALIZATION_NONE, $oRichText->getFont()->getCapitalization());
         // Slide 1 : Shape 2 : Paragraph 2
-        $oRichText = $arrayRichText[1];
+        $oRichText = $arrayRichText[2];
         self::assertInstanceOf('PhpOffice\\PhpPresentation\\Shape\\RichText\\BreakElement', $oRichText);
         // Slide 1 : Shape 2 : Paragraph 3
-        $oRichText = $arrayRichText[2];
+        $oRichText = $arrayRichText[4];
         self::assertInstanceOf('PhpOffice\\PhpPresentation\\Shape\\RichText\\Run', $oRichText);
         self::assertEquals('PHPPresentation', $oRichText->getText());
         self::assertTrue($oRichText->getFont()->isBold());
@@ -573,7 +576,10 @@ class ODPresentationTest extends TestCase
         self::assertEquals(Paragraph::LINE_SPACING_MODE_PERCENT, $oParagraph->getLineSpacingMode());
         self::assertEquals(100, $oParagraph->getLineSpacing());
         $arrayRichText = $oParagraph->getRichTextElements();
-        self::assertCount(3, $arrayRichText);
+        // the file is indented: the white space around the span of the line break is a space each
+        self::assertCount(5, $arrayRichText);
+        self::assertSame(' ', $arrayRichText[1]->getText());
+        self::assertSame(' ', $arrayRichText[3]->getText());
         // Slide 4 : Shape 3 : Paragraph 1
         $oRichText = $arrayRichText[0];
         self::assertInstanceOf('PhpOffice\\PhpPresentation\\Shape\\RichText\\Run', $oRichText);
@@ -585,11 +591,11 @@ class ODPresentationTest extends TestCase
         self::assertEquals(Font::FORMAT_LATIN, $oRichText->getFont()->getFormat());
         self::assertEquals(Font::CAPITALIZATION_NONE, $oRichText->getFont()->getCapitalization());
         // Slide 4 : Shape 3 : Paragraph 2
-        $oRichText = $arrayRichText[1];
+        $oRichText = $arrayRichText[2];
         self::assertInstanceOf('PhpOffice\\PhpPresentation\\Shape\\RichText\\BreakElement', $oRichText);
         // Slide 4 : Shape 3 : Paragraph 3
         /** @var RichText\Run $oRichText */
-        $oRichText = $arrayRichText[2];
+        $oRichText = $arrayRichText[4];
         self::assertInstanceOf(RichText\Run::class, $oRichText);
         self::assertEquals('https://github.com/PHPOffice/PHPPresentation/', $oRichText->getText());
         self::assertFalse($oRichText->getFont()->isBold());
@@ -646,7 +652,10 @@ class ODPresentationTest extends TestCase
         self::assertEquals(Paragraph::LINE_SPACING_MODE_PERCENT, $oParagraph->getLineSpacingMode());
         self::assertEquals(100, $oParagraph->getLineSpacing());
         $arrayRichText = $oParagraph->getRichTextElements();
-        self::assertCount(3, $arrayRichText);
+        // the file is indented: the white space around the span of the line break is a space each
+        self::assertCount(5, $arrayRichText);
+        self::assertSame(' ', $arrayRichText[1]->getText());
+        self::assertSame(' ', $arrayRichText[3]->getText());
         // Slide 1 : Shape 2 : Paragraph 1
         $oRichText = $arrayRichText[0];
         self::assertInstanceOf('PhpOffice\\PhpPresentation\\Shape\\RichText\\Run', $oRichText);
@@ -658,10 +667,10 @@ class ODPresentationTest extends TestCase
         self::assertEquals(Font::FORMAT_LATIN, $oRichText->getFont()->getFormat());
         self::assertEquals(Font::CAPITALIZATION_NONE, $oRichText->getFont()->getCapitalization());
         // Slide 1 : Shape 2 : Paragraph 2
-        $oRichText = $arrayRichText[1];
+        $oRichText = $arrayRichText[2];
         self::assertInstanceOf('PhpOffice\\PhpPresentation\\Shape\\RichText\\BreakElement', $oRichText);
         // Slide 1 : Shape 2 : Paragraph 3
-        $oRichText = $arrayRichText[2];
+        $oRichText = $arrayRichText[4];
         self::assertInstanceOf('PhpOffice\\PhpPresentation\\Shape\\RichText\\Run', $oRichText);
         self::assertEquals('PHPPresentation', $oRichText->getText());
         self::assertTrue($oRichText->getFont()->isBold());
@@ -1015,7 +1024,10 @@ class ODPresentationTest extends TestCase
         self::assertEquals(Paragraph::LINE_SPACING_MODE_PERCENT, $oParagraph->getLineSpacingMode());
         self::assertEquals(100, $oParagraph->getLineSpacing());
         $arrayRichText = $oParagraph->getRichTextElements();
-        self::assertCount(3, $arrayRichText);
+        // the file is indented: the white space around the span of the line break is a space each
+        self::assertCount(5, $arrayRichText);
+        self::assertSame(' ', $arrayRichText[1]->getText());
+        self::assertSame(' ', $arrayRichText[3]->getText());
         // Slide 4 : Shape 3 : Paragraph 1
         $oRichText = $arrayRichText[0];
         self::assertInstanceOf('PhpOffice\\PhpPresentation\\Shape\\RichText\\Run', $oRichText);
@@ -1027,11 +1039,11 @@ class ODPresentationTest extends TestCase
         self::assertEquals(Font::FORMAT_LATIN, $oRichText->getFont()->getFormat());
         self::assertEquals(Font::CAPITALIZATION_NONE, $oRichText->getFont()->getCapitalization());
         // Slide 4 : Shape 3 : Paragraph 2
-        $oRichText = $arrayRichText[1];
+        $oRichText = $arrayRichText[2];
         self::assertInstanceOf('PhpOffice\\PhpPresentation\\Shape\\RichText\\BreakElement', $oRichText);
         // Slide 4 : Shape 3 : Paragraph 3
         /** @var RichText\Run $oRichText */
-        $oRichText = $arrayRichText[2];
+        $oRichText = $arrayRichText[4];
         self::assertInstanceOf(RichText\Run::class, $oRichText);
         self::assertEquals('https://github.com/PHPOffice/PHPPresentation/', $oRichText->getText());
         self::assertFalse($oRichText->getFont()->isBold());
@@ -2694,7 +2706,23 @@ class ODPresentationTest extends TestCase
             'space in the paragraph itself' => ['a<text:s/>b', ['a b']],
             // LibreOffice writes the space between two words formatted apart outside their spans
             'space between two spans' => ['<text:span>a</text:span> <text:span>b</text:span>', ['a', ' ', 'b']],
-            'line feed between two spans' => ["<text:span>a</text:span>\n  <text:span>b</text:span>", ['a', 'b']],
+            // and so is any white space there, as in an indented file
+            'line feed between two spans' => ["<text:span>a</text:span>\n  <text:span>b</text:span>", ['a', ' ', 'b']],
+            'tab between two spans' => ["<text:span>a</text:span>\t<text:span>b</text:span>", ['a', ' ', 'b']],
+            'white space in a row' => ["<text:span>a  \t b\r\nc</text:span>", ['a b c']],
+            'white space in a row over two spans' => ["<text:span>a </text:span>\n <text:span> b</text:span>", ['a ', 'b']],
+            'white space in a row over the spans of a list item' => ['<text:span>a </text:span><text:span> b </text:span>', ['a ', 'b'], true],
+            'white space at the start' => ["\n <text:span> </text:span><text:span> a</text:span>", ['a']],
+            'white space at the end' => ["<text:span>a </text:span><text:span> </text:span>\n", ['a']],
+            'white space after a space, a tab or a line break written as an element' => [
+                '<text:span>a<text:s/> b<text:tab/> c</text:span><text:line-break/> d<text:s/>',
+                ["a  b\t c", null, ' d '],
+            ],
+            'white space around a link and a field' => [
+                'a <text:a xlink:href="https://example.org/"> b </text:a> c <text:page-number>3</text:page-number> d',
+                ['a ', ' b @https://example.org/', ' c ', '#3', ' d'],
+            ],
+            'no-break space' => ["<text:span>a\u{a0} \u{a0}b</text:span>", ["a\u{a0} \u{a0}b"]],
             'link in the paragraph itself' => [
                 'see <text:a xlink:href="https://example.org/">here</text:a>',
                 ['see ', 'here@https://example.org/'],
@@ -2724,7 +2752,7 @@ class ODPresentationTest extends TestCase
             'comment and an empty span' => ['<text:span>a<!-- b --></text:span><text:span/>', ['a', '']],
             'text laid out on lines of its own' => ["\n    Hello world\n   ", ['Hello world']],
             'nothing but a space' => [' ', []],
-            'span of nothing but white space' => ["<text:span>\n  </text:span>", ["\n  "]],
+            'span of nothing but white space' => ["<text:span>\n  </text:span>", []],
         ];
     }
 
@@ -2771,6 +2799,41 @@ class ODPresentationTest extends TestCase
                 : null;
         }
         self::assertSame($expected, $actual);
+    }
+
+    public function testAutoShapeWhitespaceIsCollapsed(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oPhpPresentation->getActiveSlide()->addShape((new AutoShape())->setType(AutoShape::TYPE_RECTANGLE)->setText('Auto text'));
+        $oPhpPresentation->getActiveSlide()->createRichTextShape()->createTextRun('Run');
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new ODPresentationWriter($oPhpPresentation))->save($file);
+
+        // Both paragraphs laid out on lines of their own
+        $oZip = new ZipArchive();
+        $oZip->open($file);
+        $content = (string) preg_replace(
+            ['#>Auto text</text:p>#', '#<text:span[^>]*>Run</text:span>#'],
+            [">\n  Auto \t text\n</text:p>", "\n  $0\n"],
+            (string) $oZip->getFromName('content.xml'),
+            1,
+            $count
+        );
+        self::assertSame(2, $count);
+        $oZip->addFromString('content.xml', $content);
+        $oZip->close();
+
+        $oPhpPresentationRead = (new ODPresentation())->load($file);
+        unlink($file);
+
+        $arrayShape = array_values((array) $oPhpPresentationRead->getActiveSlide()->getShapeCollection());
+        self::assertInstanceOf(AutoShape::class, $arrayShape[0]);
+        self::assertSame('Auto text', $arrayShape[0]->getText());
+        // and the paragraph after the shape starts as any other
+        self::assertInstanceOf(RichText::class, $arrayShape[1]);
+        self::assertSame('Run', $arrayShape[1]->getParagraph(0)->getPlainText());
+        self::assertCount(1, $arrayShape[1]->getParagraph(0)->getRichTextElements());
     }
 
     public function testWhitespaceSurvivesTheRoundTrip(): void
