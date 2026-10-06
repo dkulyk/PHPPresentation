@@ -319,7 +319,16 @@ class ODPresentation implements ReaderInterface
         'alignment', 'background', 'columns', 'columnSpacing', 'columnsRTL', 'fill', 'font',
         'shadow', 'listStyle', 'spacingAfter', 'spacingBefore', 'lineSpacingMode', 'lineSpacing',
         'rowHeight', 'borders', 'border', 'insetBottom', 'insetLeft', 'insetRight',
-        'insetTop', 'verticalAlignCenter', 'visible', 'wrap', 'decorative',
+        'insetTop', 'verticalAlign', 'verticalAlignCenter', 'visible', 'wrap', 'decorative',
+    ];
+
+    /**
+     * Where `draw:textarea-vertical-align` and `style:vertical-align` put the text of a table cell.
+     */
+    protected const VERTICAL_ALIGN = [
+        'top' => Alignment::VERTICAL_TOP,
+        'middle' => Alignment::VERTICAL_CENTER,
+        'bottom' => Alignment::VERTICAL_BOTTOM,
     ];
 
     /**
@@ -336,7 +345,7 @@ class ODPresentation implements ReaderInterface
     ];
 
     /**
-     * @var array<string, array{alignment: null|Alignment, background: null|BackgroundColor|Image, columns: null|int, columnSpacing: null|int, columnsRTL: null|bool, fill: null|Fill, font: null|Font, language: null|string, shadow: null|Shadow, listStyle: null|array<int, array{alignment: Alignment, bullet: Bullet}>, spacingAfter: null|float, spacingBefore: null|float, lineSpacingMode: null|string, lineSpacing: null|string, rowHeight: null|int, borders: null|Borders, border: null|Border, insetBottom: null|float, insetLeft: null|float, insetRight: null|float, insetTop: null|float, verticalAlignCenter: null|int, visible: null|bool, wrap: null|string, decorative: null|bool}>
+     * @var array<string, array{alignment: null|Alignment, background: null|BackgroundColor|Image, columns: null|int, columnSpacing: null|int, columnsRTL: null|bool, fill: null|Fill, font: null|Font, language: null|string, shadow: null|Shadow, listStyle: null|array<int, array{alignment: Alignment, bullet: Bullet}>, spacingAfter: null|float, spacingBefore: null|float, lineSpacingMode: null|string, lineSpacing: null|string, rowHeight: null|int, borders: null|Borders, border: null|Border, insetBottom: null|float, insetLeft: null|float, insetRight: null|float, insetTop: null|float, verticalAlign: null|string, verticalAlignCenter: null|int, visible: null|bool, wrap: null|string, decorative: null|bool}>
      */
     protected $arrayStyles = [];
 
@@ -582,7 +591,9 @@ class ODPresentation implements ReaderInterface
             }
         }
 
-        $nodeGraphicProps = $this->oXMLReader->getElement('style:graphic-properties', $nodeStyle);
+        // LibreOffice writes the graphic properties of a table cell as `loext:graphic-properties`,
+        // a table-cell style having none in the schema
+        $nodeGraphicProps = $this->oXMLReader->getElement('*[local-name()="graphic-properties"]', $nodeStyle);
         if ($nodeGraphicProps instanceof DOMElement) {
             // Read Shadow
             if ($nodeGraphicProps->hasAttribute('draw:shadow') && 'visible' == $nodeGraphicProps->getAttribute('draw:shadow')) {
@@ -683,6 +694,7 @@ class ODPresentation implements ReaderInterface
             }
             // Read whether the text is centred between the top and the bottom of the frame
             if ($nodeGraphicProps->hasAttribute('draw:textarea-vertical-align')) {
+                $verticalAlign = self::VERTICAL_ALIGN[$nodeGraphicProps->getAttribute('draw:textarea-vertical-align')] ?? null;
                 $verticalAlignCenter = 'middle' === $nodeGraphicProps->getAttribute('draw:textarea-vertical-align')
                     ? RichText::VALIGN_CENTER
                     : RichText::VALIGN_NOTCENTER;
@@ -715,6 +727,23 @@ class ODPresentation implements ReaderInterface
                         break;
                 }
             }
+        }
+
+        // A table cell says its padding and where its text sits between its top and its bottom on
+        // `style:table-cell-properties`, which is where ODF has them. LibreOffice reads them there
+        // and writes them in the graphic properties, as the insets of a text box
+        $nodeTableCellProps = $this->oXMLReader->getElement('style:table-cell-properties', $nodeStyle);
+        if ($nodeTableCellProps instanceof DOMElement) {
+            $padding = function (string $side) use ($nodeTableCellProps): ?float {
+                $points = self::sizeToPoint($nodeTableCellProps->getAttribute('fo:padding-' . $side) ?: $nodeTableCellProps->getAttribute('fo:padding'));
+
+                return null === $points ? null : round(CommonDrawing::pointsToPixels($points), 6);
+            };
+            $insetBottom = $padding('bottom') ?? $insetBottom ?? null;
+            $insetLeft = $padding('left') ?? $insetLeft ?? null;
+            $insetRight = $padding('right') ?? $insetRight ?? null;
+            $insetTop = $padding('top') ?? $insetTop ?? null;
+            $verticalAlign = self::VERTICAL_ALIGN[$nodeTableCellProps->getAttribute('style:vertical-align')] ?? $verticalAlign ?? null;
         }
 
         $nodeTextProperties = $this->oXMLReader->getElement('style:text-properties', $nodeStyle);
@@ -861,6 +890,7 @@ class ODPresentation implements ReaderInterface
             'insetLeft' => $insetLeft ?? null,
             'insetRight' => $insetRight ?? null,
             'insetTop' => $insetTop ?? null,
+            'verticalAlign' => $verticalAlign ?? null,
             'verticalAlignCenter' => $verticalAlignCenter ?? null,
             'visible' => $visible ?? null,
             'wrap' => $wrap ?? null,
@@ -2183,17 +2213,30 @@ class ODPresentation implements ReaderInterface
         // there. An empty cell, which LibreOffice writes with no `text:p`, keeps the paragraph it
         // was created with
         $oNodeParagraphs = $this->oXMLReader->getElements('text:p', $oNodeCell);
-        if (0 === $oNodeParagraphs->length) {
-            return;
-        }
-        $oCell->setParagraphs([]);
-        foreach ($oNodeParagraphs as $oNodeParagraph) {
-            if ($oNodeParagraph instanceof DOMElement) {
-                $this->levelParagraph = 0;
-                $this->readParagraph($oCell, $oNodeParagraph);
+        if ($oNodeParagraphs->length > 0) {
+            $oCell->setParagraphs([]);
+            foreach ($oNodeParagraphs as $oNodeParagraph) {
+                if ($oNodeParagraph instanceof DOMElement) {
+                    $this->levelParagraph = 0;
+                    $this->readParagraph($oCell, $oNodeParagraph);
+                }
             }
+            $oCell->setActiveParagraph(0);
         }
-        $oCell->setActiveParagraph(0);
+
+        // The model keeps the padding of a cell, and where its text sits between its top and its
+        // bottom, on the alignment of its first paragraph, where the PowerPoint2007 Reader puts
+        // them. A clone, as the alignment is the paragraph style's, which other paragraphs wear.
+        // Rounded because a padding goes into the file as centimetres, and a whole number of
+        // pixels is not a whole number of them
+        $oParagraph = $oCell->getParagraph(0);
+        $oAlignment = clone $oParagraph->getAlignment();
+        $oAlignment->setVertical($cellStyle['verticalAlign'] ?? $oAlignment->getVertical());
+        $oAlignment->setMarginBottom(round($cellStyle['insetBottom'] ?? $oAlignment->getMarginBottom(), 4));
+        $oAlignment->setMarginLeft(round($cellStyle['insetLeft'] ?? $oAlignment->getMarginLeft(), 4));
+        $oAlignment->setMarginRight(round($cellStyle['insetRight'] ?? $oAlignment->getMarginRight(), 4));
+        $oAlignment->setMarginTop(round($cellStyle['insetTop'] ?? $oAlignment->getMarginTop(), 4));
+        $oParagraph->setAlignment($oAlignment);
     }
 
     /**

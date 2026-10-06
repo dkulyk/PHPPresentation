@@ -2337,6 +2337,41 @@ class ContentTest extends PhpPresentationTestCase
         $this->assertZipXmlElementNotExists('content.xml', $element . '/style:graphic-properties');
     }
 
+    public function testTableCellTextLayout(): void
+    {
+        $oRow = $this->oPresentation->getActiveSlide()->createTableShape(2)->createRow();
+        $oCell = $oRow->getCell(0);
+        $oCell->createTextRun('first');
+        $oCell->getActiveParagraph()->getAlignment()
+            ->setVertical(Alignment::VERTICAL_CENTER)
+            ->setMarginLeft(96)->setMarginTop(48);
+        $oCell->createParagraph()->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+        $oCell->createTextRun('second');
+
+        // The padding and the vertical alignment of a cell are those of its first paragraph
+        $element = $this->getTableCellStyleXPath(1, 1) . '/style:table-cell-properties';
+        $this->assertZipXmlAttributeEquals('content.xml', $element, 'style:vertical-align', 'middle');
+        $this->assertZipXmlAttributeEquals('content.xml', $element, 'fo:padding-left', '2.54cm');
+        $this->assertZipXmlAttributeEquals('content.xml', $element, 'fo:padding-top', '1.27cm');
+        $this->assertZipXmlAttributeEquals('content.xml', $element, 'fo:padding-right', '0cm');
+        $this->assertZipXmlAttributeEquals('content.xml', $element, 'fo:padding-bottom', '0cm');
+        // A cell that asks for no vertical alignment names none
+        $element = $this->getTableCellStyleXPath(1, 2) . '/style:table-cell-properties';
+        $this->assertZipXmlAttributeNotExists('content.xml', $element, 'style:vertical-align');
+
+        // Every paragraph of a cell is a `text:p` of its own, which names its paragraph style
+        $cell = '//table:table-row[1]/table:table-cell[1]';
+        $this->assertZipXmlElementCount('content.xml', $cell . '/text:p', 2);
+        $this->assertZipXmlElementEquals('content.xml', $cell . '/text:p[2]/text:span', 'second');
+        $this->assertZipXmlAttributeEquals(
+            'content.xml',
+            $this->getAutomaticStyleXPath($cell . '/text:p[2]', 'text:style-name') . '/style:paragraph-properties',
+            'fo:text-align',
+            'right'
+        );
+        $this->assertIsSchemaOpenDocumentValid('1.2');
+    }
+
     public function testTableWithRowspan(): void
     {
         $oShape = $this->oPresentation->getActiveSlide()->createTableShape(3);
