@@ -171,7 +171,7 @@ class StylesTest extends PhpPresentationTestCase
         // the hatch defined in `styles.xml` is the one `content.xml` names
         $hatchName = $this->getZipXmlAttributeValue(
             'content.xml',
-            '//style:graphic-properties[@draw:fill-hatch-name]',
+            '//loext:graphic-properties[@draw:fill-hatch-name]',
             'draw:fill-hatch-name'
         );
         $element = '/office:document-styles/office:styles/draw:hatch';
@@ -192,7 +192,7 @@ class StylesTest extends PhpPresentationTestCase
         // the gradient defined in `styles.xml` is the one `content.xml` names
         $gradientName = $this->getZipXmlAttributeValue(
             'content.xml',
-            '//style:graphic-properties[@draw:fill-gradient-name]',
+            '//loext:graphic-properties[@draw:fill-gradient-name]',
             'draw:fill-gradient-name'
         );
         $element = '/office:document-styles/office:styles/draw:gradient';
@@ -218,7 +218,7 @@ class StylesTest extends PhpPresentationTestCase
         // the gradient defined in `styles.xml` is the one `content.xml` names
         $gradientName = $this->getZipXmlAttributeValue(
             'content.xml',
-            '//style:graphic-properties[@draw:fill-gradient-name]',
+            '//loext:graphic-properties[@draw:fill-gradient-name]',
             'draw:fill-gradient-name'
         );
         $element = '/office:document-styles/office:styles/draw:gradient';

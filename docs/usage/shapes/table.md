@@ -76,6 +76,12 @@ distinction this library now makes: PowerPoint leaves an untouched cell's `a:tcP
 `a:noFill` for one refused outright, and LibreOffice leaves an untouched cell without a
 `table:style-name` and gives a refused one a style with `draw:fill="none"`.
 
+The ODPresentation Writer writes a solid fill as the `fo:background-color` of the cell, a fill
+refused as `fo:background-color="transparent"`, and nothing for a cell that was given no fill, which
+the reading application then paints as it sees fit -- LibreOffice with the fill of its default
+style. The ODPresentation Reader reads the three back as `Fill::FILL_SOLID`, `Fill::FILL_NONE` and
+`Fill::FILL_UNSET`. The fill of a row is written on its cells, so it comes back on the cells.
+
 ## Cells
 A cell is a child of a row.
 

@@ -1830,34 +1830,34 @@ class Content extends AbstractDecoratorWriter
                         $cellFill = $shapeRow->getFill();
                     }
 
-                    // Note : This element is not valid in the Schema 1.2
-                    // style:graphic-properties
-                    if (Fill::FILL_NONE != $cellFill->getFillType()
-                        && Fill::FILL_UNSET != $cellFill->getFillType()
+                    // loext:graphic-properties
+                    // A table-cell style has no graphic properties in the schema, and no other place
+                    // for a gradient or a pattern: this is the element LibreOffice writes them in
+                    if (Fill::FILL_GRADIENT_LINEAR == $cellFill->getFillType()
+                        || in_array($cellFill->getFillType(), Fill::PATTERN_TYPES, true)
                     ) {
-                        $objWriter->startElement('style:graphic-properties');
-                        if (Fill::FILL_SOLID == $cellFill->getFillType()) {
-                            $objWriter->writeAttribute('draw:fill', 'solid');
-                            $objWriter->writeAttribute('draw:fill-color', '#' . $cellFill->getStartColor()->getRGB());
-                        }
+                        $objWriter->startElement('loext:graphic-properties');
                         if (Fill::FILL_GRADIENT_LINEAR == $cellFill->getFillType()) {
                             $objWriter->writeAttribute('draw:fill', 'gradient');
                             $objWriter->writeAttribute('draw:fill-gradient-name', 'gradient_' . $cellFill->getHashCode());
-                        }
-                        if (in_array($cellFill->getFillType(), Fill::PATTERN_TYPES, true)) {
+                        } else {
                             $this->writePatternFill($objWriter, $cellFill);
                         }
                         $objWriter->endElement();
                     }
-                    // >style:graphic-properties
+                    // >loext:graphic-properties
 
                     // style:table-cell-properties
+                    $objWriter->startElement('style:table-cell-properties');
+                    // A cell that refuses a fill says so, or the reading application paints it as it
+                    // paints one that names none: LibreOffice with the fill of its default style
+                    $objWriter->writeAttributeIf(Fill::FILL_SOLID == $cellFill->getFillType(), 'fo:background-color', '#' . $cellFill->getStartColor()->getRGB());
+                    $objWriter->writeAttributeIf(Fill::FILL_NONE == $cellFill->getFillType(), 'fo:background-color', 'transparent');
                     // As the PowerPoint2007 Writer does, a cell takes its padding and where its text
                     // sits between its top and its bottom from the alignment of its first paragraph
                     $cellParagraphs = $shapeCell->getParagraphs();
                     if ([] !== $cellParagraphs) {
                         $cellAlignment = reset($cellParagraphs)->getAlignment();
-                        $objWriter->startElement('style:table-cell-properties');
                         $objWriter->writeAttributeIf(
                             isset(self::CELL_VERTICAL_ALIGN[$cellAlignment->getVertical()]),
                             'style:vertical-align',
@@ -1872,8 +1872,8 @@ class Content extends AbstractDecoratorWriter
                         ] as $attribute => $margin) {
                             $objWriter->writeAttribute($attribute, round($margin / CommonDrawing::DPI_96 * 2.54, 6) . 'cm');
                         }
-                        $objWriter->endElement();
                     }
+                    $objWriter->endElement();
                     // >style:table-cell-properties
 
                     // style:paragraph-properties
