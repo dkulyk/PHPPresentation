@@ -123,4 +123,16 @@ trait ShapeCollection
 
         return $this;
     }
+
+    /**
+     * Replace each shape of the collection with a clone of it that this container holds.
+     */
+    protected function cloneShapeCollection(): void
+    {
+        $shapes = $this->shapeCollection;
+        $this->shapeCollection = [];
+        foreach ($shapes as $shape) {
+            $this->addShape(clone $shape);
+        }
+    }
 }

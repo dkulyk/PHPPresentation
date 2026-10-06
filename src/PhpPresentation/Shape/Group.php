@@ -33,6 +33,12 @@ class Group extends AbstractShape implements ShapeContainerInterface
         parent::__construct();
     }
 
+    public function __clone()
+    {
+        parent::__clone();
+        $this->cloneShapeCollection();
+    }
+
     /**
      * Get X Offset.
      */
