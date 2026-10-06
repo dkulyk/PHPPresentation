@@ -1271,6 +1271,65 @@ class ODPresentationTest extends TestCase
         self::assertEquals($expected, $arrayShape[0]->getParagraph()->getRichTextElements()[0]->getLanguage());
     }
 
+    /**
+     * @return array<string, array{string, string, string, int, bool, bool}>
+     */
+    public static function dataProviderFontScript(): array
+    {
+        $latin = 'fo:font-family="Arial" fo:font-size="24pt" fo:font-weight="bold" fo:font-style="normal"';
+        $asian = 'style:font-family-asian="MS Gothic" style:font-size-asian="20pt" style:font-weight-asian="normal" style:font-style-asian="italic"';
+        $complex = 'style:font-family-complex="Tahoma" style:font-size-complex="18pt" style:font-weight-complex="normal" style:font-style-complex="normal"';
+
+        return [
+            'all three, as LibreOffice writes them' => [$latin . ' ' . $asian . ' ' . $complex, Font::FORMAT_LATIN, 'Arial', 24, true, false],
+            'all three, script-type asian' => [$latin . ' ' . $asian . ' ' . $complex . ' style:script-type="asian"', Font::FORMAT_EAST_ASIAN, 'MS Gothic', 20, false, true],
+            'all three, script-type complex' => [$latin . ' ' . $asian . ' ' . $complex . ' style:script-type="complex"', Font::FORMAT_COMPLEX_SCRIPT, 'Tahoma', 18, false, false],
+            'asian and complex' => [$asian . ' ' . $complex, Font::FORMAT_EAST_ASIAN, 'MS Gothic', 20, false, true],
+            'complex alone' => [$complex, Font::FORMAT_COMPLEX_SCRIPT, 'Tahoma', 18, false, false],
+            'a Latin size and an Asian family' => ['fo:font-size="24pt" style:font-family-asian="MS Gothic"', Font::FORMAT_LATIN, 'MS Gothic', 24, false, false],
+        ];
+    }
+
+    /**
+     * A style can spell the font once per script; the font read is the one of a single script.
+     *
+     * @dataProvider dataProviderFontScript
+     */
+    #[DataProvider('dataProviderFontScript')]
+    public function testFontScript(string $attributes, string $format, string $name, int $size, bool $bold, bool $italic): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oPhpPresentation->getActiveSlide()->createRichTextShape()->createTextRun('Sample');
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new ODPresentationWriter($oPhpPresentation))->save($file);
+
+        $oZip = new ZipArchive();
+        $oZip->open($file);
+        $content = (string) $oZip->getFromName('content.xml');
+        $oZip->addFromString('content.xml', str_replace(
+            'fo:font-family="Calibri" fo:font-size="10pt" fo:language="en" fo:country="US" style:script-type="latin"',
+            $attributes,
+            $content,
+            $count
+        ));
+        $oZip->close();
+        self::assertGreaterThan(0, $count);
+
+        $oPhpPresentationRead = (new ODPresentation())->load($file);
+        unlink($file);
+
+        $arrayShape = array_values((array) $oPhpPresentationRead->getActiveSlide()->getShapeCollection());
+        self::assertInstanceOf(RichText::class, $arrayShape[0]);
+        $oFont = $arrayShape[0]->getParagraph()->getRichTextElements()[0]->getFont();
+        self::assertInstanceOf(Font::class, $oFont);
+        self::assertEquals($format, $oFont->getFormat());
+        self::assertEquals($name, $oFont->getName());
+        self::assertEquals($size, $oFont->getSize());
+        self::assertSame($bold, $oFont->isBold());
+        self::assertSame($italic, $oFont->isItalic());
+    }
+
     public function testFontStateSurvivesTheRoundTrip(): void
     {
         $oPhpPresentation = new PhpPresentation();
