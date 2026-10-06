@@ -467,7 +467,9 @@ class ODPresentation implements ReaderInterface
             if ($oElement instanceof DOMElement) {
                 $value = $oElement->nodeValue;
                 if (in_array($property, ['setCreated', 'setModified'])) {
-                    $dateTime = DateTime::createFromFormat(DateTime::W3C, $value);
+                    // A date may carry fractions of a second and may leave out its time zone, as
+                    // it does from this Writer, which writes it in UTC, and from LibreOffice
+                    $dateTime = date_create($value, timezone_open('UTC'));
                     if (!$dateTime) {
                         $dateTime = new DateTime();
                     }
