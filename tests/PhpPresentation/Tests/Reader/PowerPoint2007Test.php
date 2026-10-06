@@ -1505,6 +1505,105 @@ class PowerPoint2007Test extends TestCase
         self::assertEquals(20, $arrayShape[0]->getTitle()->getFont()->getSize());
     }
 
+    public function testChartTitleAlignmentAndLayoutsAreReadBack(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oChart = $oPhpPresentation->getActiveSlide()->createChartShape();
+        $oChart->getTitle()->setOffsetX(0.3)->setOffsetY(0.05)->setWidth(0.4)->setHeight(0.1);
+        $oChart->getTitle()->getAlignment()
+            ->setHorizontal(Alignment::HORIZONTAL_RIGHT)
+            ->setVertical(Alignment::VERTICAL_BOTTOM)
+            ->setMarginLeft(10)
+            ->setMarginRight(20)
+            ->setIndent(-10)
+            ->setLevel(1);
+        $oChart->getLegend()->setOffsetX(0.7)->setOffsetY(0.2)->setWidth(0.25)->setHeight(0.5);
+        $oChart->getPlotArea()->setOffsetX(0.1)->setOffsetY(0.2)->setWidth(0.55)->setHeight(0.7);
+        $oChart->getPlotArea()->setType((new Bar())->addSeries(new Series('Downloads', ['Jan' => '1', 'Feb' => '5'])));
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new PowerPoint2007Writer($oPhpPresentation))->save($file);
+        $oPhpPresentationRead = (new PowerPoint2007())->load($file);
+        unlink($file);
+
+        $arrayShape = array_values((array) $oPhpPresentationRead->getActiveSlide()->getShapeCollection());
+        self::assertInstanceOf(Chart::class, $arrayShape[0]);
+        $oAlignment = $arrayShape[0]->getTitle()->getAlignment();
+        self::assertEquals(Alignment::HORIZONTAL_RIGHT, $oAlignment->getHorizontal());
+        self::assertEquals(Alignment::VERTICAL_BOTTOM, $oAlignment->getVertical());
+        self::assertEquals(10, $oAlignment->getMarginLeft());
+        self::assertEquals(20, $oAlignment->getMarginRight());
+        self::assertEquals(-10, $oAlignment->getIndent());
+        self::assertEquals(1, $oAlignment->getLevel());
+        foreach ([
+            [$arrayShape[0]->getTitle(), 0.3, 0.05, 0.4, 0.1],
+            [$arrayShape[0]->getLegend(), 0.7, 0.2, 0.25, 0.5],
+            [$arrayShape[0]->getPlotArea(), 0.1, 0.2, 0.55, 0.7],
+        ] as [$subject, $offsetX, $offsetY, $width, $height]) {
+            self::assertSame($offsetX, $subject->getOffsetX());
+            self::assertSame($offsetY, $subject->getOffsetY());
+            self::assertSame($width, $subject->getWidth());
+            self::assertSame($height, $subject->getHeight());
+        }
+    }
+
+    /**
+     * @return array<string, array<float|string>>
+     */
+    public static function dataProviderChartManualLayout(): array
+    {
+        $position = '<c:x val="0.2"/><c:y val="0.1"/><c:w val="0.5"/><c:h val="0.6"/>';
+
+        return [
+            // A width and a height in the mode `edge` are the right and the bottom edge
+            'edges' => ['<c:xMode val="edge"/><c:yMode val="edge"/><c:wMode val="edge"/><c:hMode val="edge"/>' . $position, 0.2, 0.1, 0.3, 0.5],
+            // A position left out is the edge of the chart
+            'no position' => ['<c:xMode val="edge"/><c:yMode val="edge"/>', 0.0, 0.0, 0.0, 0.0],
+            // An offset from the default position is not a position: the title keeps the one it was born with
+            'factor' => ['<c:xMode val="factor"/><c:yMode val="factor"/>' . $position, 0.01, 0.01, 0.0, 0.0],
+            'no mode' => [$position, 0.01, 0.01, 0.0, 0.0],
+        ];
+    }
+
+    /**
+     * @dataProvider dataProviderChartManualLayout
+     */
+    #[DataProvider('dataProviderChartManualLayout')]
+    public function testChartManualLayoutModesAreRead(string $manualLayout, float $offsetX, float $offsetY, float $width, float $height): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oChart = $oPhpPresentation->getActiveSlide()->createChartShape();
+        $oChart->getPlotArea()->setType((new Bar())->addSeries(new Series('Downloads', ['Jan' => '1', 'Feb' => '5'])));
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new PowerPoint2007Writer($oPhpPresentation))->save($file);
+
+        $oZip = new ZipArchive();
+        $oZip->open($file);
+        // On PHP 7.4, addFromString() deletes the entry and appends a new one, which this loop would reach again
+        for ($index = 0, $count = $oZip->numFiles; $index < $count; ++$index) {
+            $name = (string) $oZip->getNameIndex($index);
+            if (1 === preg_match('#^ppt/charts/chart[^/]*\.xml$#', $name)) {
+                $oZip->addFromString($name, (string) preg_replace(
+                    '#<c:manualLayout>.*?</c:manualLayout>#s',
+                    '<c:manualLayout>' . $manualLayout . '</c:manualLayout>',
+                    (string) $oZip->getFromName($name)
+                ));
+            }
+        }
+        $oZip->close();
+
+        $oPhpPresentationRead = (new PowerPoint2007())->load($file);
+        unlink($file);
+
+        $arrayShape = array_values((array) $oPhpPresentationRead->getActiveSlide()->getShapeCollection());
+        self::assertInstanceOf(Chart::class, $arrayShape[0]);
+        self::assertEqualsWithDelta($offsetX, $arrayShape[0]->getTitle()->getOffsetX(), 1e-9);
+        self::assertEqualsWithDelta($offsetY, $arrayShape[0]->getTitle()->getOffsetY(), 1e-9);
+        self::assertEqualsWithDelta($width, $arrayShape[0]->getTitle()->getWidth(), 1e-9);
+        self::assertEqualsWithDelta($height, $arrayShape[0]->getTitle()->getHeight(), 1e-9);
+    }
+
     /**
      * @return array<array<null|bool|string>>
      */

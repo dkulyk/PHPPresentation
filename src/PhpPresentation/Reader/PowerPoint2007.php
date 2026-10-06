@@ -1834,6 +1834,11 @@ class PowerPoint2007 implements ReaderInterface
                         $oShape->getTitle()->setVisible(!in_array($oElement->getAttribute('val'), ['', '1', 'true'], true));
                     }
 
+                    $oElementPlotArea = $xmlReader->getElement('/c:chartSpace/c:chart/c:plotArea');
+                    if ($oElementPlotArea instanceof DOMElement) {
+                        $this->loadChartLayout($xmlReader, $oElementPlotArea, $oShape->getPlotArea());
+                    }
+
                     $shapeType = $this->loadTypeChart($xmlReader);
                     if ($shapeType instanceof Chart\Type\AbstractType) {
                         $oShape->getPlotArea()->setType($shapeType);
@@ -1911,6 +1916,7 @@ class PowerPoint2007 implements ReaderInterface
                         if ($elementLegendPos = $xmlReader->getElement('c:legendPos', $oElement)) {
                             $oShape->getLegend()->setPosition($elementLegendPos->getAttribute('val'));
                         }
+                        $this->loadChartLayout($xmlReader, $oElement, $oShape->getLegend());
                     } else {
                         $oShape->getLegend()->setVisible(false);
                     }
@@ -2144,6 +2150,36 @@ class PowerPoint2007 implements ReaderInterface
     }
 
     /**
+     * The alignment of a paragraph, as its `a:pPr` gives it.
+     *
+     * @param \PhpOffice\PhpPresentation\Style\Alignment $oAlignment
+     */
+    protected function loadAlignment(DOMElement $oElement, $oAlignment): void
+    {
+        if ($oElement->hasAttribute('algn')) {
+            $oAlignment->setHorizontal($oElement->getAttribute('algn'));
+        }
+        if ($oElement->hasAttribute('fontAlgn')) {
+            $oAlignment->setVertical($oElement->getAttribute('fontAlgn'));
+        }
+        if ($oElement->hasAttribute('marL')) {
+            $oAlignment->setMarginLeft(CommonDrawing::emuToPixels((int) $oElement->getAttribute('marL')));
+        }
+        if ($oElement->hasAttribute('marR')) {
+            $oAlignment->setMarginRight(CommonDrawing::emuToPixels((int) $oElement->getAttribute('marR')));
+        }
+        if ($oElement->hasAttribute('indent')) {
+            $oAlignment->setIndent((int) CommonDrawing::emuToPixels((int) $oElement->getAttribute('indent')));
+        }
+        if ($oElement->hasAttribute('lvl')) {
+            $oAlignment->setLevel((int) $oElement->getAttribute('lvl'));
+        }
+        if ($oElement->hasAttribute('rtl')) {
+            $oAlignment->setIsRTL((bool) $oElement->getAttribute('rtl'));
+        }
+    }
+
+    /**
      * @param Cell|RichText $oShape
      */
     protected function loadParagraph(XMLReader $document, DOMElement $oElement, $oShape): void
@@ -2154,27 +2190,7 @@ class PowerPoint2007 implements ReaderInterface
 
         $oSubElement = $document->getElement('a:pPr', $oElement);
         if ($oSubElement instanceof DOMElement) {
-            if ($oSubElement->hasAttribute('algn')) {
-                $oParagraph->getAlignment()->setHorizontal($oSubElement->getAttribute('algn'));
-            }
-            if ($oSubElement->hasAttribute('fontAlgn')) {
-                $oParagraph->getAlignment()->setVertical($oSubElement->getAttribute('fontAlgn'));
-            }
-            if ($oSubElement->hasAttribute('marL')) {
-                $oParagraph->getAlignment()->setMarginLeft(CommonDrawing::emuToPixels((int) $oSubElement->getAttribute('marL')));
-            }
-            if ($oSubElement->hasAttribute('marR')) {
-                $oParagraph->getAlignment()->setMarginRight(CommonDrawing::emuToPixels((int) $oSubElement->getAttribute('marR')));
-            }
-            if ($oSubElement->hasAttribute('indent')) {
-                $oParagraph->getAlignment()->setIndent((int) CommonDrawing::emuToPixels((int) $oSubElement->getAttribute('indent')));
-            }
-            if ($oSubElement->hasAttribute('lvl')) {
-                $oParagraph->getAlignment()->setLevel((int) $oSubElement->getAttribute('lvl'));
-            }
-            if ($oSubElement->hasAttribute('rtl')) {
-                $oParagraph->getAlignment()->setIsRTL((bool) $oSubElement->getAttribute('rtl'));
-            }
+            $this->loadAlignment($oSubElement, $oParagraph->getAlignment());
 
             $oElementLineSpacingPoints = $document->getElement('a:lnSpc/a:spcPts', $oSubElement);
             if ($oElementLineSpacingPoints instanceof DOMElement) {
@@ -2574,7 +2590,8 @@ class PowerPoint2007 implements ReaderInterface
     }
 
     /**
-     * The title of a chart: its text, and the font of its first run, where the writer puts it.
+     * The title of a chart: its text, the font of its first run and the alignment of its first
+     * paragraph, where the writer puts them, and its position.
      *
      * @param DOMElement $oElement the `c:title` element of the chart
      */
@@ -2593,6 +2610,46 @@ class PowerPoint2007 implements ReaderInterface
         if ($oElementFont instanceof DOMElement) {
             $this->loadStyleFont($xmlReader, $oElementFont, $oTitle->getFont());
         }
+
+        $oElementAlignment = $xmlReader->getElement('c:tx/c:rich/a:p/a:pPr', $oElement);
+        if ($oElementAlignment instanceof DOMElement) {
+            $this->loadAlignment($oElementAlignment, $oTitle->getAlignment());
+        }
+
+        $this->loadChartLayout($xmlReader, $oElement, $oTitle);
+    }
+
+    /**
+     * The position of a title, a legend or a plot area inside its chart, where the file gives one.
+     *
+     * The model holds a position measured from the edge of the chart, which is what the Writer
+     * writes. A `c:x` or a `c:y` in the default mode, `factor`, is an offset from wherever the
+     * application would have put the element, which only the application knows: such a layout is
+     * left alone, as it is by LibreOffice. A width or a height in the mode `edge` is the right or
+     * the bottom edge.
+     *
+     * @param Chart\Legend|Chart\PlotArea|Chart\Title $subject
+     * @param DOMElement $oElement the `c:title`, `c:legend` or `c:plotArea` element
+     */
+    protected function loadChartLayout(XMLReader $xmlReader, DOMElement $oElement, $subject): void
+    {
+        $oElementLayout = $xmlReader->getElement('c:layout/c:manualLayout', $oElement);
+        if (!$oElementLayout instanceof DOMElement) {
+            return;
+        }
+        $layout = [];
+        foreach (['xMode', 'yMode', 'wMode', 'hMode', 'x', 'y', 'w', 'h'] as $name) {
+            $oElementValue = $xmlReader->getElement('c:' . $name, $oElementLayout);
+            $layout[$name] = $oElementValue instanceof DOMElement ? $oElementValue->getAttribute('val') : '';
+        }
+        if ('edge' !== $layout['xMode'] || 'edge' !== $layout['yMode']) {
+            return;
+        }
+
+        $subject->setOffsetX((float) $layout['x']);
+        $subject->setOffsetY((float) $layout['y']);
+        $subject->setWidth((float) $layout['w'] - ('edge' === $layout['wMode'] ? (float) $layout['x'] : 0));
+        $subject->setHeight((float) $layout['h'] - ('edge' === $layout['hMode'] ? (float) $layout['y'] : 0));
     }
 
     /**
