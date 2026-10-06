@@ -1817,7 +1817,13 @@ class ODPresentation implements ReaderInterface
 
         $text = [];
         foreach ($this->oXMLReader->getElements('text:p', $oNodeShape) as $oNodeParagraph) {
-            $text[] = $oNodeParagraph->nodeValue;
+            // read as a paragraph, for the spaces and the tabs written as elements
+            $oParagraph = new Paragraph();
+            if ($oNodeParagraph instanceof DOMElement) {
+                $this->readParagraphItem($oParagraph, $oNodeParagraph);
+            }
+            // a line break of a paragraph is a line of the text, as a paragraph is
+            $text[] = str_replace("\r\n", "\n", $oParagraph->getPlainText());
         }
         $shape->setText(implode("\n", $text));
 
