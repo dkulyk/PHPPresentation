@@ -2585,6 +2585,38 @@ class PowerPoint2007Test extends TestCase
         self::assertEquals('Notes Font', $oRun->getFont()->getName());
     }
 
+    public function testFontOfMasterTextStyleSurvivesTheRoundTrip(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oTextStyles = $oPhpPresentation->getAllMasterSlides()[0]->getTextStyles();
+        $oTextStyles->getTitleStyleAtLvl(1)->getFont()->setName('Arial');
+        $oTextStyles->getBodyStyleAtLvl(1)->getFont()->setName('MS Gothic')->setFormat(Font::FORMAT_EAST_ASIAN);
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new PowerPoint2007Writer($oPhpPresentation))->save($file);
+        $oPhpPresentationRead = (new PowerPoint2007())->load($file);
+        unlink($file);
+
+        $oTextStyles = $oPhpPresentationRead->getAllMasterSlides()[0]->getTextStyles();
+        self::assertEquals('Arial', $oTextStyles->getTitleStyleAtLvl(1)->getFont()->getName());
+        self::assertEquals(Font::FORMAT_LATIN, $oTextStyles->getTitleStyleAtLvl(1)->getFont()->getFormat());
+        self::assertEquals('MS Gothic', $oTextStyles->getBodyStyleAtLvl(1)->getFont()->getName());
+        self::assertEquals(Font::FORMAT_EAST_ASIAN, $oTextStyles->getBodyStyleAtLvl(1)->getFont()->getFormat());
+    }
+
+    /**
+     * PPTX_GroupNested.pptx comes out of PowerPoint 16: its title style names `+mj-lt` and its
+     * body style `+mn-lt`, which its theme makes Aptos Display and Aptos.
+     */
+    public function testFontOfMasterTextStyleNamedByTheTheme(): void
+    {
+        $oPhpPresentation = (new PowerPoint2007())->load(PHPPRESENTATION_TESTS_BASE_DIR . '/resources/files/PPTX_GroupNested.pptx');
+
+        $oTextStyles = $oPhpPresentation->getAllMasterSlides()[0]->getTextStyles();
+        self::assertEquals('Aptos Display', $oTextStyles->getTitleStyleAtLvl(1)->getFont()->getName());
+        self::assertEquals('Aptos', $oTextStyles->getBodyStyleAtLvl(1)->getFont()->getName());
+    }
+
     public function testHyperlinkOnMasterAndLayoutSurvivesTheRoundTrip(): void
     {
         $oPhpPresentation = new PhpPresentation();

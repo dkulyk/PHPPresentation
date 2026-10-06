@@ -227,6 +227,9 @@ class PptSlideMasters extends AbstractSlide
                     $objWriter->endElement();
                     $objWriter->endElement();
                 }
+                $objWriter->startElement('a:' . $oParagraph->getFont()->getFormat());
+                $objWriter->writeAttribute('typeface', $oParagraph->getFont()->getName());
+                $objWriter->endElement();
                 $objWriter->endElement();
                 $objWriter->endElement();
             }
