@@ -868,6 +868,7 @@ class PowerPoint2007 implements ReaderInterface
                         if ($oElementLvlDefRPR->hasAttribute('i') && 1 == $oElementLvlDefRPR->getAttribute('i')) {
                             $oRTParagraph->getFont()->setItalic(true);
                         }
+                        $this->loadFontTypeface($xmlReader, $oElementLvlDefRPR, $oRTParagraph->getFont());
                     }
                     $oElementSchemeColor = $xmlReader->getElement('a:defRPr/a:solidFill/a:schemeClr', $oElementLvl);
                     if ($oElementSchemeColor instanceof DOMElement) {
@@ -1034,6 +1035,26 @@ class PowerPoint2007 implements ReaderInterface
     protected function getTypeface(string $typeface): string
     {
         return $this->themeFonts[$typeface] ?? $typeface;
+    }
+
+    /**
+     * The script a font is given for, and its name: `a:latin` where there is one, else `a:ea`,
+     * else `a:cs`.
+     */
+    protected function loadFontTypeface(XMLReader $xmlReader, DOMElement $oElement, Font $oFont): void
+    {
+        foreach ([Font::FORMAT_LATIN, Font::FORMAT_EAST_ASIAN, Font::FORMAT_COMPLEX_SCRIPT] as $format) {
+            $oElementFont = $xmlReader->getElement('a:' . $format, $oElement);
+            if ($oElementFont instanceof DOMElement) {
+                $oFont->setFormat($format);
+                $typeface = $this->getTypeface($oElementFont->getAttribute('typeface'));
+                if ('' !== $typeface) {
+                    $oFont->setName($typeface);
+                }
+
+                return;
+            }
+        }
     }
 
     protected function loadSlideBackground(XMLReader $xmlReader, DOMElement $oElement, AbstractSlide $oSlide): void
@@ -2295,26 +2316,7 @@ class PowerPoint2007 implements ReaderInterface
                     }
 
                     // Font
-                    $oElementFontFormat = null;
-                    $oElementFontFormatComplexScript = $document->getElement('a:cs', $oElementrPr);
-                    if ($oElementFontFormatComplexScript instanceof DOMElement) {
-                        $oText->getFont()->setFormat(Font::FORMAT_COMPLEX_SCRIPT);
-                        $oElementFontFormat = $oElementFontFormatComplexScript;
-                    }
-                    $oElementFontFormatEastAsian = $document->getElement('a:ea', $oElementrPr);
-                    if ($oElementFontFormatEastAsian instanceof DOMElement) {
-                        $oText->getFont()->setFormat(Font::FORMAT_EAST_ASIAN);
-                        $oElementFontFormat = $oElementFontFormatEastAsian;
-                    }
-                    $oElementFontFormatLatin = $document->getElement('a:latin', $oElementrPr);
-                    if ($oElementFontFormatLatin instanceof DOMElement) {
-                        $oText->getFont()->setFormat(Font::FORMAT_LATIN);
-                        $oElementFontFormat = $oElementFontFormatLatin;
-                    }
-                    $typeface = $oElementFontFormat instanceof DOMElement ? $this->getTypeface($oElementFontFormat->getAttribute('typeface')) : '';
-                    if ('' !== $typeface) {
-                        $oText->getFont()->setName($typeface);
-                    }
+                    $this->loadFontTypeface($document, $oElementrPr, $oText->getFont());
                     // Font definition
                     $oElementFont = $document->getElement('a:latin', $oElementrPr);
                     if ($oElementFont instanceof DOMElement) {
