@@ -1633,6 +1633,43 @@ class ObjectsChartTest extends PhpPresentationTestCase
         $this->assertIsSchemaOpenDocumentValid('1.2');
     }
 
+    /**
+     * @dataProvider dataProviderFontFormat
+     */
+    #[DataProvider('dataProviderFontFormat')]
+    public function testFontFormat(string $format, string $suffix): void
+    {
+        $oShape = $this->oPresentation->getActiveSlide()->createChartShape();
+        $oBar = new Bar();
+        $oBar->addSeries(new Series('Series', $this->seriesData));
+        $oShape->getPlotArea()->setType($oBar);
+        $oShape->getTitle()->getFont()->setName('Arial')->setSize(20)->setBold(true)->setItalic(true)->setFormat($format);
+
+        $element = $this->getTitleStyleXPath() . '/style:text-properties';
+        $this->assertZipXmlAttributeEquals('Object 1/content.xml', $element, 'style:font-family' . $suffix, 'Arial');
+        $this->assertZipXmlAttributeEquals('Object 1/content.xml', $element, 'style:font-size' . $suffix, '20pt');
+        $this->assertZipXmlAttributeEquals('Object 1/content.xml', $element, 'style:font-style' . $suffix, 'italic');
+        $this->assertZipXmlAttributeEquals('Object 1/content.xml', $element, 'style:font-weight' . $suffix, 'bold');
+        // the Latin attributes would style the Latin text only, which this font was not set for
+        $this->assertZipXmlAttributeNotExists('Object 1/content.xml', $element, 'fo:font-family');
+        $this->assertZipXmlAttributeNotExists('Object 1/content.xml', $element, 'fo:font-size');
+        $this->assertZipXmlAttributeNotExists('Object 1/content.xml', $element, 'fo:font-style');
+        $this->assertZipXmlAttributeNotExists('Object 1/content.xml', $element, 'fo:font-weight');
+
+        $this->assertIsSchemaOpenDocumentValid('1.2');
+    }
+
+    /**
+     * @return array<array<string>>
+     */
+    public static function dataProviderFontFormat(): array
+    {
+        return [
+            [Font::FORMAT_EAST_ASIAN, '-asian'],
+            [Font::FORMAT_COMPLEX_SCRIPT, '-complex'],
+        ];
+    }
+
     public function testFontStateLeftAloneIsNotWritten(): void
     {
         $oShape = $this->oPresentation->getActiveSlide()->createChartShape();
