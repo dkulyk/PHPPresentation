@@ -29,25 +29,23 @@ class CommentAuthors extends AbstractDecoratorWriter
 {
     public function render(): ZipInterface
     {
+        // A comment has to name an author: those without one share an author without a name, as in
+        // LibreOffice. It comes first, since `PptComments` writes the comments without an author with the id 0
+        $oNoAuthor = new Author();
         /**
-         * @var Author[]
+         * @var array<string, array<int, Author>>
          */
-        $arrayAuthors = [];
+        $arrayAuthors = [$oNoAuthor->getHashCode() => []];
         foreach ($this->getPresentation()->getAllSlides() as $oSlide) {
             foreach ($this->flattenShapes($oSlide->getShapeCollection()) as $oShape) {
                 if (!($oShape instanceof Comment)) {
                     continue;
                 }
-                $oAuthor = $oShape->getAuthor();
-                if (!($oAuthor instanceof Author)) {
-                    continue;
-                }
-                if (array_key_exists($oAuthor->getHashCode(), $arrayAuthors)) {
-                    continue;
-                }
-                $arrayAuthors[$oAuthor->getHashCode()] = $oAuthor;
+                $oAuthor = $oShape->getAuthor() ?? $oNoAuthor;
+                $arrayAuthors[$oAuthor->getHashCode()][] = $oAuthor;
             }
         }
+        $arrayAuthors = array_filter($arrayAuthors);
         if (!empty($arrayAuthors)) {
             $this->getZip()->addFromString('ppt/commentAuthors.xml', $this->writeCommentsAuthors($arrayAuthors));
         }
@@ -56,7 +54,7 @@ class CommentAuthors extends AbstractDecoratorWriter
     }
 
     /**
-     * @param Author[] $arrayAuthors
+     * @param array<string, array<int, Author>> $arrayAuthors the author of every comment, by author
      *
      * @return string
      */
@@ -69,17 +67,20 @@ class CommentAuthors extends AbstractDecoratorWriter
         $objWriter->startElement('p:cmAuthorLst');
         $objWriter->writeAttribute('xmlns:p', 'http://schemas.openxmlformats.org/presentationml/2006/main');
 
-        $idxAuthor = 0;
-        foreach ($arrayAuthors as $oAuthor) {
-            $oAuthor->setIndex($idxAuthor++);
+        foreach (array_values($arrayAuthors) as $idxAuthor => $arrayAuthor) {
+            // Two authors of one name and initials are one author
+            foreach ($arrayAuthor as $oAuthor) {
+                $oAuthor->setIndex($idxAuthor);
+            }
 
             // p:cmAuthor
             $objWriter->startElement('p:cmAuthor');
-            $objWriter->writeAttribute('id', $oAuthor->getIndex());
-            $objWriter->writeAttribute('name', $oAuthor->getName());
-            $objWriter->writeAttribute('initials', $oAuthor->getInitials());
-            $objWriter->writeAttribute('lastIdx', '2');
-            $objWriter->writeAttribute('clrIdx', 0);
+            $objWriter->writeAttribute('id', $idxAuthor);
+            $objWriter->writeAttribute('name', (string) $arrayAuthor[0]->getName());
+            $objWriter->writeAttribute('initials', (string) $arrayAuthor[0]->getInitials());
+            // The comments of an author are numbered from 1
+            $objWriter->writeAttribute('lastIdx', count($arrayAuthor));
+            $objWriter->writeAttribute('clrIdx', $idxAuthor);
             $objWriter->endElement();
         }
 

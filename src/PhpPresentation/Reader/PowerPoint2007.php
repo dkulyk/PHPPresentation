@@ -1139,6 +1139,10 @@ class PowerPoint2007 implements ReaderInterface
             if (!($oElement instanceof DOMElement)) {
                 continue;
             }
+            // An author without a name is the one the comments without an author are written with
+            if ('' === $oElement->getAttribute('name') . $oElement->getAttribute('initials')) {
+                continue;
+            }
             $oAuthor = new Comment\Author();
             $oAuthor
                 ->setIndex((int) $oElement->getAttribute('id'))
