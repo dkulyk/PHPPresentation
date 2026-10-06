@@ -322,10 +322,13 @@ class ObjectsChart extends AbstractDecoratorWriter
     {
         $this->xmlContent->startElement('style:text-properties');
         $this->xmlContent->writeAttribute('fo:color', '#' . $font->getColor()->getRGB());
-        $this->xmlContent->writeAttribute('fo:font-family', $font->getName());
-        $this->xmlContent->writeAttribute('fo:font-size', $font->getSize() . 'pt');
-        $this->xmlContent->writeAttribute('fo:font-style', $font->isItalic() ? 'italic' : 'normal');
-        $this->xmlContent->writeAttributeIf($font->isBold(), 'fo:font-weight', 'bold');
+        // LibreOffice styles the text of each script from the attributes of that script alone
+        $suffix = [Font::FORMAT_EAST_ASIAN => '-asian', Font::FORMAT_COMPLEX_SCRIPT => '-complex'][$font->getFormat()] ?? '';
+        $prefix = '' === $suffix ? 'fo:' : 'style:';
+        $this->xmlContent->writeAttribute($prefix . 'font-family' . $suffix, $font->getName());
+        $this->xmlContent->writeAttribute($prefix . 'font-size' . $suffix, $font->getSize() . 'pt');
+        $this->xmlContent->writeAttribute($prefix . 'font-style' . $suffix, $font->isItalic() ? 'italic' : 'normal');
+        $this->xmlContent->writeAttributeIf($font->isBold(), $prefix . 'font-weight' . $suffix, 'bold');
         $this->writeFontStates($this->xmlContent, $font);
         $this->xmlContent->endElement();
     }
