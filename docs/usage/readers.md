@@ -184,10 +184,10 @@ model, with the exceptions its notes list.
 |  | Pie3D | :material-close: | :material-alert-outline:<sup>55</sup> | :material-close: | :material-alert-outline:<sup>56</sup> | :material-check: |
 |  | Radar | :material-close: | :material-check: | :material-close: | :material-check: | :material-check: |
 |  | Scatter | :material-close: | :material-check: | :material-close: | :material-check: | :material-check: |
-|  | Chart title | :material-close: | :material-check: | :material-close: | :material-alert-outline:<sup>57</sup> | :material-check: |
-|  | Legend | :material-close: | :material-alert-outline:<sup>58</sup> | :material-close: | :material-alert-outline:<sup>59</sup> | :material-check: |
-|  | Axes (title, min/max, gridlines, format) | :material-close: | :material-alert-outline:<sup>60</sup> | :material-close: | :material-alert-outline:<sup>61</sup> | :material-check: |
-|  | Series: labels, colours, markers | :material-close: | :material-alert-outline:<sup>62</sup> | :material-close: | :material-alert-outline:<sup>63</sup> | :material-check: |
+|  | Chart title | :material-close: | :material-check: | :material-close: | :material-check: | :material-check: |
+|  | Legend | :material-close: | :material-alert-outline:<sup>57</sup> | :material-close: | :material-alert-outline:<sup>58</sup> | :material-check: |
+|  | Axes (title, min/max, gridlines, format) | :material-close: | :material-alert-outline:<sup>59</sup> | :material-close: | :material-alert-outline:<sup>60</sup> | :material-check: |
+|  | Series: labels, colours, markers | :material-close: | :material-alert-outline:<sup>61</sup> | :material-close: | :material-alert-outline:<sup>62</sup> | :material-check: |
 |  | Chart language |  | :material-close: | :material-close: | :material-check: | :material-check: |
 
 1. Category, company, revision, status not read; dates only with zone, no fraction.
@@ -246,10 +246,9 @@ model, with the exceptions its notes list.
 54. Hole size, first slice angle not read.
 55. View3D not read.
 56. View3D not read.
-57. Title position not read.
-58. No fill or border.
-59. Visibility and position only.
-60. No number format, tick marks, reverse order.
-61. No min/max, units, gridlines, number format.
-62. No label position or series-name label.
-63. No markers, label position, font.
+57. No fill or border.
+58. No font, fill, border or alignment.
+59. No number format, tick marks, reverse order.
+60. No min/max, units, gridlines, number format.
+61. No label position or series-name label.
+62. No markers, label position, font.
