@@ -1231,7 +1231,7 @@ abstract class AbstractSlide extends AbstractDecoratorWriter
         // p:notes/p:cSld/p:spTree/p:sp[2]/p:spPr/a:xfrm/a:off
         $objWriter->startElement('a:off');
         $objWriter->writeAttribute('x', CommonDrawing::pixelsToEmu($pNote->getOffsetX()));
-        $objWriter->writeAttribute('y', CommonDrawing::pixelsToEmu(round($pNote->getExtentY() / 2) + $pNote->getOffsetY()));
+        $objWriter->writeAttribute('y', CommonDrawing::pixelsToEmu(round($pNote->getExtentY() / 2)));
         $objWriter->endElement();
 
         // p:notes/p:cSld/p:spTree/p:sp[2]/p:spPr/a:xfrm/a:ext

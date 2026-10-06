@@ -976,7 +976,7 @@ class PptSlidesTest extends PhpPresentationTestCase
         // Notes
         $element = '/p:notes/p:cSld/p:spTree/p:sp[2]/p:spPr/a:xfrm/a:off';
         $this->assertZipXmlAttributeEquals('ppt/notesSlides/notesSlide1.xml', $element, 'x', Drawing::pixelsToEmu($oNote->getOffsetX()));
-        $this->assertZipXmlAttributeEquals('ppt/notesSlides/notesSlide1.xml', $element, 'y', Drawing::pixelsToEmu(round($oNote->getExtentY() / 2) + $oNote->getOffsetY()));
+        $this->assertZipXmlAttributeEquals('ppt/notesSlides/notesSlide1.xml', $element, 'y', Drawing::pixelsToEmu(round($oNote->getExtentY() / 2)));
         $element = '/p:notes/p:cSld/p:spTree/p:sp[2]/p:spPr/a:xfrm/a:ext';
         $this->assertZipXmlAttributeEquals('ppt/notesSlides/notesSlide1.xml', $element, 'cx', 5486400);
         $this->assertZipXmlAttributeEquals('ppt/notesSlides/notesSlide1.xml', $element, 'cy', 3600450);

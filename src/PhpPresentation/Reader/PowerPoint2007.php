@@ -1102,7 +1102,9 @@ class PowerPoint2007 implements ReaderInterface
                 }
             }
 
-            $arrayElements = $xmlReader->getElements('/p:notes/p:cSld/p:spTree/*');
+            // The slide image is no shape of the note: the Writer writes one of its own, and
+            // LibreOffice reads it as the thumbnail of the page
+            $arrayElements = $xmlReader->getElements('/p:notes/p:cSld/p:spTree/*[not(p:nvSpPr/p:nvPr/p:ph/@type="sldImg")]');
             $this->loadSlideShapes($xmlReader, $oNote, $arrayElements, $xmlReader);
         }
     }

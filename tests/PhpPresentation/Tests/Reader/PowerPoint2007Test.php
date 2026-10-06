@@ -2576,13 +2576,32 @@ class PowerPoint2007Test extends TestCase
         }
         self::assertEquals(['Aptos', 'Calibri', 'Arial'], $fonts);
 
-        // The shape of the text of the notes comes after the image of the slide
-        $oShapes = $oPhpPresentationRead->getActiveSlide()->getNote()->getShapeCollection();
-        $oShape = end($oShapes);
+        $oShape = $oPhpPresentationRead->getActiveSlide()->getNote()->getShapeCollection()[0];
         self::assertInstanceOf(RichText::class, $oShape);
         $oRun = $oShape->getParagraph(0)->getRichTextElements()[0];
         self::assertInstanceOf(RichText\Run::class, $oRun);
         self::assertEquals('Notes Font', $oRun->getFont()->getName());
+    }
+
+    public function testNoteSlideImage(): void
+    {
+        // The image of the slide is a placeholder of the notes page, and no shape of the note
+        $oPhpPresentation = (new PowerPoint2007())->load(PHPPRESENTATION_TESTS_BASE_DIR . '/resources/files/PPTX_SlideNoteWithRichText.pptx');
+        $oShapes = $oPhpPresentation->getSlide(0)->getNote()->getShapeCollection();
+        self::assertCount(1, $oShapes);
+        self::assertInstanceOf(RichText::class, $oShapes[0]);
+        self::assertEquals('body', $oShapes[0]->getPlaceholder()->getType());
+        self::assertEquals(456, $oShapes[0]->getOffsetY());
+
+        // Written back, the text stays on the notes page, below the image the Writer puts there
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new PowerPoint2007Writer($oPhpPresentation))->save($file);
+        $oPhpPresentationRead = (new PowerPoint2007())->load($file);
+        unlink($file);
+
+        $oShapes = $oPhpPresentationRead->getSlide(0)->getNote()->getShapeCollection();
+        self::assertCount(1, $oShapes);
+        self::assertEquals(444, $oShapes[0]->getOffsetY());
     }
 
     public function testHyperlinkOnMasterAndLayoutSurvivesTheRoundTrip(): void
