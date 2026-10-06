@@ -20,8 +20,11 @@ declare(strict_types=1);
 
 namespace PhpPresentation\Tests\Writer\PowerPoint2007;
 
+use PhpOffice\Common\Adapter\Zip\ZipArchiveAdapter;
 use PhpOffice\Common\Drawing;
 use PhpOffice\PhpPresentation\Exception\UndefinedChartTypeException;
+use PhpOffice\PhpPresentation\HashTable;
+use PhpOffice\PhpPresentation\PhpPresentation;
 use PhpOffice\PhpPresentation\Shape\Chart;
 use PhpOffice\PhpPresentation\Shape\Chart\Axis;
 use PhpOffice\PhpPresentation\Shape\Chart\Gridlines;
@@ -43,7 +46,9 @@ use PhpOffice\PhpPresentation\Style\Fill;
 use PhpOffice\PhpPresentation\Style\Font;
 use PhpOffice\PhpPresentation\Style\Outline;
 use PhpOffice\PhpPresentation\Tests\PhpPresentationTestCase;
+use PhpOffice\PhpPresentation\Writer\PowerPoint2007\PptCharts;
 use PHPUnit\Framework\Attributes\DataProvider;
+use ZipArchive;
 
 class PptChartsTest extends PhpPresentationTestCase
 {
@@ -198,6 +203,50 @@ class PptChartsTest extends PhpPresentationTestCase
         $this->assertZipXmlAttributeEquals('ppt/charts/' . $oShape->getIndexedFilename(), $element, 'val', '0');
 
         $this->assertIsSchemaECMA376Valid();
+    }
+
+    /**
+     * A temporary file that cannot be removed is left behind: the workbook is in the package by then.
+     */
+    public function testChartIncludeSpreadsheetTempFileNotRemoved(): void
+    {
+        $oShape = $this->oPresentation->getActiveSlide()->createChartShape();
+        $oShape->setIncludeSpreadsheet(true);
+        $oLine = new Line();
+        $oLine->addSeries(new Series('Downloads', $this->seriesData));
+        $oShape->getPlotArea()->setType($oLine);
+
+        $oHashTable = new HashTable();
+        $oHashTable->add($oShape);
+
+        // unlink() fails on a directory, so the temporary file is turned into one
+        $oWriter = new class() extends PptCharts {
+            /**
+             * @var string
+             */
+            public $tempDirectory;
+
+            protected function writeSpreadsheet(PhpPresentation $presentation, Chart $chart, string $tempName): string
+            {
+                $this->tempDirectory = substr($tempName, 0, -5);
+                unlink($this->tempDirectory);
+                mkdir($this->tempDirectory);
+
+                return parent::writeSpreadsheet($presentation, $chart, $tempName);
+            }
+        };
+        $oZip = new ZipArchiveAdapter();
+        $oZip->open($this->filePath);
+        $oWriter->setZip($oZip);
+        $oWriter->setPresentation($this->oPresentation);
+        $oWriter->setDrawingHashTable($oHashTable);
+        $oWriter->render()->close();
+        rmdir($oWriter->tempDirectory);
+
+        $oZipArchive = new ZipArchive();
+        self::assertTrue($oZipArchive->open($this->filePath));
+        self::assertNotFalse($oZipArchive->locateName('ppt/embeddings/' . $oShape->getIndexedFilename() . '.xlsx'));
+        $oZipArchive->close();
     }
 
     /**
