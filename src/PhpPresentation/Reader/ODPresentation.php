@@ -66,8 +66,8 @@ class ODPresentation implements ReaderInterface
     /**
      * The kind of field each OpenDocument field element stands for.
      *
-     * `text:time` says only that there is no date in it: which of the timed formats it is travels
-     * as a data style this reader does not read, so the plainest of them is what comes back.
+     * `text:date` and `text:time` say only whether there is a date in it: which of the dated
+     * formats it is travels as a data style, and these are what comes back without one.
      *
      * @var array<string, string>
      */
@@ -78,6 +78,42 @@ class ODPresentation implements ReaderInterface
         'text:time' => 'datetime10',
         'text:author-name' => 'author',
         'text:file-name' => 'file',
+    ];
+
+    /**
+     * The kind of file field each `text:display` of a `text:file-name` stands for.
+     */
+    protected const FIELD_FILE_OOXML = [
+        'full' => 'file',
+        'path' => 'file1',
+        'name' => 'file2',
+        'name-and-extension' => 'file3',
+    ];
+
+    /**
+     * The dated format each data style of a date or a time field stands for, by what is in the
+     * style: `auto` for `number:automatic-order`, then its parts, each with `long`, `textual` and
+     * its decimal places where it has them, and each text between them as it is.
+     *
+     * These are the eight date styles and the seven time styles of LibreOffice Impress, which
+     * tells them apart the same way, and the format it writes each one to OOXML as.
+     */
+    protected const DATA_STYLE_OOXML = [
+        'auto|day:long|.|month:long|.|year:long' => Field::TYPE_DATETIME,
+        'auto|day-of-week:long|, |day|. |month:long:textual| |year:long' => 'datetime2',
+        'day:long|.|month:long|.|year' => Field::TYPE_DATETIME,
+        'day:long|.|month:long|.|year:long' => 'datetime1',
+        'day|. |month:textual| |year:long' => 'datetime5',
+        'day|. |month:long:textual| |year:long' => 'datetime3',
+        'day-of-week|, |day|. |month:long:textual| |year:long' => 'datetime2',
+        'day-of-week:long|, |day|. |month:long:textual| |year:long' => 'datetime2',
+        'auto|hours|:|minutes|:|seconds|am-pm' => 'datetime11',
+        'hours|:|minutes' => 'datetime10',
+        'hours|:|minutes|:|seconds' => 'datetime11',
+        'hours|:|minutes|:|seconds:2' => 'datetime11',
+        'hours|:|minutes|am-pm' => 'datetime12',
+        'hours|:|minutes|:|seconds|am-pm' => 'datetime13',
+        'hours|:|minutes|:|seconds:2|am-pm' => 'datetime13',
     ];
 
     /**
@@ -346,6 +382,13 @@ class ODPresentation implements ReaderInterface
     protected $arrayCommonStyles = [];
 
     /**
+     * The dated format each data style of the file stands for, by the name of the style.
+     *
+     * @var array<string, string>
+     */
+    protected $arrayDataStyles = [];
+
+    /**
      * The number of every named slide, so that a link can be resolved back to it.
      *
      * @var array<string, int>
@@ -424,6 +467,7 @@ class ODPresentation implements ReaderInterface
     {
         $this->oPhpPresentation = new PhpPresentation();
         $this->oPhpPresentation->removeSlideByIndex();
+        $this->arrayDataStyles = [];
 
         $this->oZip = new ZipArchive();
         $this->oZip->open($pFilename);
@@ -516,7 +560,10 @@ class ODPresentation implements ReaderInterface
     protected function loadSlides(): void
     {
         foreach ($this->oXMLReader->getElements('/office:document-content/office:automatic-styles/*') as $oElement) {
-            if ($oElement instanceof DOMElement && $oElement->hasAttribute('style:name')) {
+            if ($oElement instanceof DOMElement && in_array($oElement->nodeName, ['number:date-style', 'number:time-style'], true)) {
+                // a data style is kept apart: its family shares its names with the text styles
+                $this->loadDataStyle($oElement);
+            } elseif ($oElement instanceof DOMElement && $oElement->hasAttribute('style:name')) {
                 $this->loadStyle($oElement);
             }
         }
@@ -547,6 +594,65 @@ class ODPresentation implements ReaderInterface
                 $this->oPhpPresentation->getPresentationProperties()->setSlideshowType(PresentationProperties::SLIDESHOW_TYPE_BROWSE);
             }
         }
+    }
+
+    /**
+     * Read which dated format a `number:date-style` or a `number:time-style` stands for.
+     */
+    protected function loadDataStyle(DOMElement $nodeStyle): void
+    {
+        $parts = 'true' === $nodeStyle->getAttribute('number:automatic-order') ? ['auto'] : [];
+        foreach ($nodeStyle->childNodes as $node) {
+            if (!$node instanceof DOMElement) {
+                continue;
+            }
+            $parts[] = 'number:text' === $node->nodeName
+                ? $node->nodeValue
+                : $node->localName
+                    . ('long' === $node->getAttribute('number:style') ? ':long' : '')
+                    . ('true' === $node->getAttribute('number:textual') ? ':textual' : '')
+                    . ($node->hasAttribute('number:decimal-places') ? ':' . $node->getAttribute('number:decimal-places') : '');
+        }
+        $type = self::DATA_STYLE_OOXML[implode('|', $parts)] ?? null;
+        if (null !== $type) {
+            $this->arrayDataStyles[$nodeStyle->getAttribute('style:name')] = $type;
+        }
+    }
+
+    /**
+     * The `text:time` a `text:date` is written with, a space between the two, where the field is
+     * a date and a time together.
+     */
+    protected function getTimeOfDate(DOMElement $oNodeField): ?DOMElement
+    {
+        $oNodeSpace = 'text:date' === $oNodeField->nodeName ? $oNodeField->nextSibling : null;
+        $oNodeTime = null === $oNodeSpace ? null : $oNodeSpace->nextSibling;
+        $isSpace = null !== $oNodeSpace
+            && ('text:s' === $oNodeSpace->nodeName || (XML_TEXT_NODE === $oNodeSpace->nodeType && ' ' === $oNodeSpace->nodeValue));
+
+        return $isSpace && $oNodeTime instanceof DOMElement && 'text:time' === $oNodeTime->nodeName ? $oNodeTime : null;
+    }
+
+    /**
+     * The kind of field a field element stands for, down to which of its formats it is.
+     *
+     * @param null|DOMElement $oNodeTime the `text:time` written beside a `text:date`
+     */
+    protected function loadFieldType(DOMElement $oNodeField, ?DOMElement $oNodeTime): string
+    {
+        $type = self::FIELD_OOXML[$oNodeField->nodeName];
+        if ('text:file-name' === $oNodeField->nodeName) {
+            return self::FIELD_FILE_OOXML[$oNodeField->getAttribute('text:display')] ?? $type;
+        }
+        if (null !== $oNodeTime) {
+            // OpenDocument has no field for a date and a time together, and OOXML has two: the
+            // one with the seconds and the one without
+            $time = $this->arrayDataStyles[$oNodeTime->getAttribute('style:data-style-name')] ?? '';
+
+            return in_array($time, ['datetime11', 'datetime13'], true) ? 'datetime9' : 'datetime8';
+        }
+
+        return $this->arrayDataStyles[$oNodeField->getAttribute('style:data-style-name')] ?? $type;
     }
 
     /**
@@ -2003,8 +2109,14 @@ class ODPresentation implements ReaderInterface
         $oNodes = $isSpan && !$oNodeParent->hasChildNodes()
             ? [$oNodeParent->ownerDocument->createTextNode('')]
             : $oNodeParent->childNodes;
-        $oTextRun = null;
+        $oTextRun = $oNodeTime = null;
         foreach ($oNodes as $oNode) {
+            if (null !== $oNodeTime) {
+                // the space and the time of a date and a time, read with the date
+                $oNodeTime = $oNode->isSameNode($oNodeTime) ? null : $oNodeTime;
+
+                continue;
+            }
             $name = $oNode->nodeName;
             // A link and a field are a run of their own; a field is a run whose text the reading
             // application recomputes, and it holds the text it stands in for
@@ -2040,9 +2152,12 @@ class ODPresentation implements ReaderInterface
                 continue;
             }
             if (null === $oTextRun || $isRun) {
-                $oTextRun = isset(self::FIELD_OOXML[$name])
-                    ? $oParagraph->createField(self::FIELD_OOXML[$name])
-                    : $oParagraph->createTextRun();
+                if ($oNode instanceof DOMElement && isset(self::FIELD_OOXML[$name])) {
+                    $oNodeTime = $this->getTimeOfDate($oNode);
+                    $oTextRun = $oParagraph->createField($this->loadFieldType($oNode, $oNodeTime));
+                } else {
+                    $oTextRun = $oParagraph->createTextRun();
+                }
                 // the span of a link is around it or in it
                 $oNodeSpan = $oNode instanceof DOMElement ? $this->oXMLReader->getElement('text:span[@text:style-name]', $oNode) : null;
                 $keyRun = $oNodeSpan instanceof DOMElement ? $oNodeSpan->getAttribute('text:style-name') : $keyStyle;
