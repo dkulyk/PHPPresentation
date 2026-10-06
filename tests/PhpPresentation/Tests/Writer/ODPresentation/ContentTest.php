@@ -1525,7 +1525,7 @@ class ContentTest extends PhpPresentationTestCase
     {
         return [
             [Placeholder::PH_TYPE_TITLE, 'title'],
-            ['ctrTitle', 'title'],
+            [Placeholder::PH_TYPE_CTRTITLE, 'title'],
             [Placeholder::PH_TYPE_SUBTITLE, 'subtitle'],
             [Placeholder::PH_TYPE_BODY, 'outline'],
             [Placeholder::PH_TYPE_FOOTER, 'footer'],

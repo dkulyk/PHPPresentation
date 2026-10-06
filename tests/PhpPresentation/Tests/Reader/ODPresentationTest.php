@@ -1457,7 +1457,7 @@ class ODPresentationTest extends TestCase
     {
         return [
             [Placeholder::PH_TYPE_TITLE, Placeholder::PH_TYPE_TITLE],
-            ['ctrTitle', Placeholder::PH_TYPE_TITLE],
+            [Placeholder::PH_TYPE_CTRTITLE, Placeholder::PH_TYPE_TITLE],
             [Placeholder::PH_TYPE_SUBTITLE, Placeholder::PH_TYPE_SUBTITLE],
             [Placeholder::PH_TYPE_BODY, Placeholder::PH_TYPE_BODY],
             [Placeholder::PH_TYPE_FOOTER, Placeholder::PH_TYPE_FOOTER],
