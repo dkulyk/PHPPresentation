@@ -23,7 +23,6 @@ namespace PhpOffice\PhpPresentation\Writer\PowerPoint2007;
 use PhpOffice\Common\Adapter\Zip\ZipInterface;
 use PhpOffice\Common\Drawing as CommonDrawing;
 use PhpOffice\Common\XMLWriter;
-use PhpOffice\PhpPresentation\Exception\FileRemoveException;
 use PhpOffice\PhpPresentation\Exception\UndefinedChartTypeException;
 use PhpOffice\PhpPresentation\PhpPresentation;
 use PhpOffice\PhpPresentation\Shape\Chart;
@@ -61,10 +60,8 @@ class PptCharts extends AbstractDecoratorWriter
                     $pFilename = tempnam(sys_get_temp_dir(), 'PhpSpreadsheet');
                     $this->getZip()->addFromString('ppt/embeddings/' . $shape->getIndexedFilename() . '.xlsx', $this->writeSpreadsheet($this->getPresentation(), $shape, $pFilename . '.xlsx'));
 
-                    // remove temp file
-                    if (false === @unlink($pFilename)) {
-                        throw new FileRemoveException($pFilename);
-                    }
+                    // remove temp file: the part is written, a file left behind is no reason to lose the save
+                    @unlink($pFilename);
                 }
             }
         }
@@ -282,9 +279,7 @@ class PptCharts extends AbstractDecoratorWriter
 
         // Load file in memory
         $returnValue = file_get_contents($tempName);
-        if (false === @unlink($tempName)) {
-            throw new FileRemoveException($tempName);
-        }
+        @unlink($tempName);
 
         return $returnValue;
     }
