@@ -233,6 +233,18 @@ class AbstractShapeTest extends TestCase
         self::assertNull($object->getContainer());
     }
 
+    public function testContainerOverrideIdenticalShapes(): void
+    {
+        $oSlide = new Slide();
+        $twin = $oSlide->createRichTextShape();
+        $object = $oSlide->createRichTextShape();
+
+        self::assertSame($twin->getHashCode(), $object->getHashCode());
+        $object->setContainer(null, true);
+        self::assertNull($object->getContainer());
+        self::assertSame([$twin], array_values($oSlide->getShapeCollection()));
+    }
+
     public function testContainerException(): void
     {
         $object = new RichText();
