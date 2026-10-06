@@ -1610,11 +1610,16 @@ class PowerPoint2007 implements ReaderInterface
                 }
                 $oCell = $oRow->getCell($keyCell);
                 $oCell->setParagraphs([]);
-                if ($oElementCell->hasAttribute('gridSpan')) {
-                    $oCell->setColSpan((int) $oElementCell->getAttribute('gridSpan'));
-                }
-                if ($oElementCell->hasAttribute('rowSpan')) {
-                    $oCell->setRowSpan((int) $oElementCell->getAttribute('rowSpan'));
+                // A cell that a span covers starts none: LibreOffice writes a span on the covered
+                // cells of a block, and does not read one there
+                if (!in_array($oElementCell->getAttribute('hMerge'), ['1', 'true'], true)
+                    && !in_array($oElementCell->getAttribute('vMerge'), ['1', 'true'], true)) {
+                    if ($oElementCell->hasAttribute('gridSpan')) {
+                        $oCell->setColSpan((int) $oElementCell->getAttribute('gridSpan'));
+                    }
+                    if ($oElementCell->hasAttribute('rowSpan')) {
+                        $oCell->setRowSpan((int) $oElementCell->getAttribute('rowSpan'));
+                    }
                 }
 
                 foreach ($document->getElements('a:txBody/a:p', $oElementCell) as $oElementPara) {

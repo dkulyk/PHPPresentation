@@ -185,7 +185,8 @@ $cellA1->setWidth(100);
 A cell spans the columns to its right with `setColSpan`, and the rows below it with `setRowSpan`.
 The cells it covers stay in the row: a cell spanning five columns covers the next four, so the
 next cell after it is `getCell(5)`, not the one `nextCell` returns. A cell that a span covers is
-written as covered, and a span set on it is ignored.
+written as covered, and a span set on it is ignored. In a PowerPoint2007 file, a span that runs
+past the last column or row stops at the edge of the table.
 
 ``` php
 <?php
