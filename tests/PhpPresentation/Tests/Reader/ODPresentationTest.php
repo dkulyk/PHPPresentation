@@ -603,6 +603,45 @@ class ODPresentationTest extends TestCase
         //$this->assertEquals('PHPPresentation', $oRichText->getHyperlink()->getTooltip());
     }
 
+    /**
+     * The dates of a document are read whether they carry fractions of a second or a time zone,
+     * and one with no time zone is read as the Writer writes it, in UTC.
+     *
+     * @dataProvider dataProviderDates
+     */
+    #[DataProvider('dataProviderDates')]
+    public function testDates(string $file, string $created, string $modified): void
+    {
+        $properties = (new ODPresentation())->load(PHPPRESENTATION_TESTS_BASE_DIR . '/resources/files/' . $file)->getDocumentProperties();
+
+        self::assertSame($created, gmdate('Y-m-d\TH:i:s', $properties->getCreated()));
+        self::assertSame($modified, gmdate('Y-m-d\TH:i:s', $properties->getModified()));
+    }
+
+    /**
+     * @return array<string, array<string>>
+     */
+    public static function dataProviderDates(): array
+    {
+        return [
+            'this Writer' => ['Sample_12.odp', '2015-07-08T11:58:43', '2015-07-08T11:58:43'],
+            'LibreOffice' => ['Issue_00141.odp', '2015-11-06T09:46:09', '2015-11-06T09:50:07'],
+        ];
+    }
+
+    public function testDatesRoundTrip(): void
+    {
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        $presentation = new PhpPresentation();
+        $presentation->getDocumentProperties()->setCreated(1234567890)->setModified(1345678901);
+        (new ODPresentationWriter($presentation))->save($file);
+        $properties = (new ODPresentation())->load($file)->getDocumentProperties();
+        unlink($file);
+
+        self::assertSame(1234567890, $properties->getCreated());
+        self::assertSame(1345678901, $properties->getModified());
+    }
+
     public function testLoadFileWithoutImages(): void
     {
         $file = PHPPRESENTATION_TESTS_BASE_DIR . '/resources/files/Sample_12.odp';
