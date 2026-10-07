@@ -1870,8 +1870,8 @@ class PptSlidesTest extends PhpPresentationTestCase
         $this->assertZipXmlAttributeNotExists('ppt/slides/slide1.xml', $element, 'vert');
         $this->assertIsSchemaECMA376Valid();
 
-        $oCell->getActiveParagraph()->getAlignment()->setVertical(Alignment::VERTICAL_BOTTOM);
-        $oCell->getActiveParagraph()->getAlignment()->setTextDirection(Alignment::TEXT_DIRECTION_STACKED);
+        $oCell->getAlignment()->setVertical(Alignment::VERTICAL_BOTTOM);
+        $oCell->getAlignment()->setTextDirection(Alignment::TEXT_DIRECTION_STACKED);
         $this->resetPresentationFile();
 
         $this->assertZipXmlElementExists('ppt/slides/slide1.xml', $element);
@@ -1996,7 +1996,7 @@ class PptSlidesTest extends PhpPresentationTestCase
         $oRow = $oShape->createRow();
         $oCell = $oRow->getCell();
         $oCell->createTextRun('AAA');
-        $oCell->getActiveParagraph()->getAlignment()
+        $oCell->getAlignment()
             ->setMarginBottom(10)
             ->setMarginLeft(20)
             ->setMarginRight(30)
@@ -2008,6 +2008,22 @@ class PptSlidesTest extends PhpPresentationTestCase
         $this->assertZipXmlAttributeEquals('ppt/slides/slide1.xml', $element, 'marL', Drawing::pixelsToEmu(20));
         $this->assertZipXmlAttributeEquals('ppt/slides/slide1.xml', $element, 'marR', Drawing::pixelsToEmu(30));
         $this->assertZipXmlAttributeEquals('ppt/slides/slide1.xml', $element, 'marT', Drawing::pixelsToEmu(40));
+        $this->assertIsSchemaECMA376Valid();
+    }
+
+    public function testTableCellParagraphMarginIsNotTheCellMargin(): void
+    {
+        $oSlide = $this->oPresentation->getActiveSlide();
+        $oShape = $oSlide->createTableShape(1);
+        $oCell = $oShape->createRow()->getCell();
+        $oCell->createTextRun('AAA');
+        $oCell->getActiveParagraph()->getAlignment()->setMarginLeft(20)->setMarginTop(40);
+
+        // Written once, on the paragraph: PowerPoint adds a cell's margin to its paragraph's
+        $element = '/p:sld/p:cSld/p:spTree/p:graphicFrame/a:graphic/a:graphicData/a:tbl/a:tr/a:tc';
+        $this->assertZipXmlAttributeEquals('ppt/slides/slide1.xml', $element . '/a:txBody/a:p/a:pPr', 'marL', Drawing::pixelsToEmu(20));
+        $this->assertZipXmlAttributeEquals('ppt/slides/slide1.xml', $element . '/a:tcPr', 'marL', 0);
+        $this->assertZipXmlAttributeEquals('ppt/slides/slide1.xml', $element . '/a:tcPr', 'marT', 0);
         $this->assertIsSchemaECMA376Valid();
     }
 

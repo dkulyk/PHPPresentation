@@ -1719,27 +1719,21 @@ class PowerPoint2007 implements ReaderInterface
                 $this->loadNumericStartAts($oCell->getParagraphs());
 
                 $oElementTcPr = $document->getElement('a:tcPr', $oElementCell);
+                // The cell's own alignment; a margin the cell leaves out is the DrawingML default
+                $margin = fn (string $name, int $default): float => CommonDrawing::emuToPixels(
+                    $oElementTcPr instanceof DOMElement && $oElementTcPr->hasAttribute($name) ? (int) $oElementTcPr->getAttribute($name) : $default
+                );
+                $oCell->getAlignment()
+                    ->setMarginLeft($margin('marL', 91440))
+                    ->setMarginRight($margin('marR', 91440))
+                    ->setMarginTop($margin('marT', 45720))
+                    ->setMarginBottom($margin('marB', 45720));
                 if ($oElementTcPr instanceof DOMElement) {
-                    $numParagraphs = count($oCell->getParagraphs());
-                    if ($numParagraphs > 0) {
-                        if ($oElementTcPr->hasAttribute('vert')) {
-                            $oCell->getParagraph(0)->getAlignment()->setTextDirection($oElementTcPr->getAttribute('vert'));
-                        }
-                        if ($oElementTcPr->hasAttribute('anchor')) {
-                            $oCell->getParagraph(0)->getAlignment()->setVertical($oElementTcPr->getAttribute('anchor'));
-                        }
-                        if ($oElementTcPr->hasAttribute('marB')) {
-                            $oCell->getParagraph(0)->getAlignment()->setMarginBottom(CommonDrawing::emuToPixels((int) $oElementTcPr->getAttribute('marB')));
-                        }
-                        if ($oElementTcPr->hasAttribute('marL')) {
-                            $oCell->getParagraph(0)->getAlignment()->setMarginLeft(CommonDrawing::emuToPixels((int) $oElementTcPr->getAttribute('marL')));
-                        }
-                        if ($oElementTcPr->hasAttribute('marR')) {
-                            $oCell->getParagraph(0)->getAlignment()->setMarginRight(CommonDrawing::emuToPixels((int) $oElementTcPr->getAttribute('marR')));
-                        }
-                        if ($oElementTcPr->hasAttribute('marT')) {
-                            $oCell->getParagraph(0)->getAlignment()->setMarginTop(CommonDrawing::emuToPixels((int) $oElementTcPr->getAttribute('marT')));
-                        }
+                    if ($oElementTcPr->hasAttribute('vert')) {
+                        $oCell->getAlignment()->setTextDirection($oElementTcPr->getAttribute('vert'));
+                    }
+                    if ($oElementTcPr->hasAttribute('anchor')) {
+                        $oCell->getAlignment()->setVertical($oElementTcPr->getAttribute('anchor'));
                     }
 
                     $oFill = $this->loadStyleFill($document, $oElementTcPr);

@@ -122,6 +122,9 @@ Properties:
 - `indent`
 - `marginLeft`
 - `marginRight`
+- `marginTop` (table cell)
+- `marginBottom` (table cell)
+- `textDirection` (table cell)
 
 ### RTL / LTR
 

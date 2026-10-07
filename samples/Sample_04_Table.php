@@ -50,7 +50,7 @@ $cell->createTextRun('Title row')->getFont()->setBold(true)->setSize(16);
 $cell->getBorders()->getBottom()->setLineWidth(4)
     ->setLineStyle(Border::LINE_SINGLE)
     ->setDashStyle(Border::DASH_DASH);
-$cell->getActiveParagraph()->getAlignment()
+$cell->getAlignment()
     ->setMarginLeft(10);
 
 // Add row
@@ -63,7 +63,7 @@ $row->getFill()->setFillType(Fill::FILL_GRADIENT_LINEAR)
     ->setEndColor(new Color('FFFFFFFF'));
 $oCell = $row->nextCell();
 $oCell->createTextRun('R1C1')->getFont()->setBold(true);
-$oCell->getActiveParagraph()->getAlignment()->setMarginLeft(20);
+$oCell->getAlignment()->setMarginLeft(20);
 $oCell = $row->nextCell();
 $oCell->createTextRun('R1C2')->getFont()->setBold(true);
 $oCell = $row->nextCell();
@@ -83,12 +83,12 @@ $row->getFill()->setFillType(Fill::FILL_SOLID)
     ->setEndColor(new Color('FFE06B20'));
 $oCell = $row->nextCell();
 $oCell->createTextRun('R2C1');
-$oCell->getActiveParagraph()->getAlignment()
+$oCell->getAlignment()
     ->setMarginLeft(30)
     ->setTextDirection(PhpOffice\PhpPresentation\Style\Alignment::TEXT_DIRECTION_VERTICAL_270);
 $oCell = $row->nextCell();
 $oCell->createTextRun('R2C2');
-$oCell->getActiveParagraph()->getAlignment()
+$oCell->getAlignment()
     ->setMarginBottom(10)
     ->setMarginTop(20)
     ->setMarginRight(30)
@@ -104,7 +104,7 @@ $row->getFill()->setFillType(Fill::FILL_SOLID)
     ->setEndColor(new Color('FFE06B20'));
 $oCell = $row->nextCell();
 $oCell->createTextRun('R3C1');
-$oCell->getActiveParagraph()->getAlignment()->setMarginLeft(40);
+$oCell->getAlignment()->setMarginLeft(40);
 $oCell = $row->nextCell();
 $oCell->createTextRun('R3C2');
 $oCell = $row->nextCell();
@@ -119,7 +119,7 @@ $row->getFill()->setFillType(Fill::FILL_SOLID)
 $cellC1 = $row->nextCell();
 $textRunC1 = $cellC1->createTextRun('Link');
 $textRunC1->getHyperlink()->setUrl('https://github.com/PHPOffice/PHPPresentation/')->setTooltip('PHPPresentation');
-$cellC1->getActiveParagraph()->getAlignment()->setMarginLeft(50);
+$cellC1->getAlignment()->setMarginLeft(50);
 $cellC2 = $row->nextCell();
 $textRunC2 = $cellC2->createTextRun('RichText with');
 $textRunC2->getFont()->setBold(true);

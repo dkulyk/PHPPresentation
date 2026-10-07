@@ -24,6 +24,7 @@ use PhpOffice\PhpPresentation\Exception\OutOfBoundsException;
 use PhpOffice\PhpPresentation\Shape\RichText\Paragraph;
 use PhpOffice\PhpPresentation\Shape\RichText\TextElement;
 use PhpOffice\PhpPresentation\Shape\Table\Cell;
+use PhpOffice\PhpPresentation\Style\Alignment;
 use PhpOffice\PhpPresentation\Style\Borders;
 use PhpOffice\PhpPresentation\Style\Fill;
 use PHPUnit\Framework\TestCase;
@@ -138,6 +139,26 @@ class CellTest extends TestCase
 
         self::assertInstanceOf('PhpOffice\\PhpPresentation\\Shape\\Table\\Cell', $object->setBorders(new Borders()));
         self::assertInstanceOf('PhpOffice\\PhpPresentation\\Style\\Borders', $object->getBorders());
+    }
+
+    public function testGetSetAlignment(): void
+    {
+        $object = new Cell();
+        $alignment = $object->getAlignment();
+        self::assertNotSame($alignment, $object->getParagraph(0)->getAlignment());
+        $hash = $object->getHashCode();
+        $alignment->setMarginTop(10);
+        self::assertNotEquals($hash, $object->getHashCode());
+        $hash = $object->getHashCode();
+        $alignment->setMarginBottom(10);
+        self::assertNotEquals($hash, $object->getHashCode());
+        $hash = $object->getHashCode();
+        $alignment->setTextDirection(Alignment::TEXT_DIRECTION_VERTICAL_270);
+        self::assertNotEquals($hash, $object->getHashCode());
+
+        $newAlignment = new Alignment();
+        self::assertSame($object, $object->setAlignment($newAlignment));
+        self::assertSame($newAlignment, $object->getAlignment());
     }
 
     public function testGetSetColspan(): void
