@@ -363,6 +363,13 @@ class ODPresentation implements ReaderInterface
     protected $levelParagraph = 0;
 
     /**
+     * Whether a white space read next is dropped: at the start of a paragraph and after another one.
+     *
+     * @var bool
+     */
+    private $ignoreSpace = true;
+
+    /**
      * @var bool
      */
     protected $loadImages = true;
@@ -1822,6 +1829,7 @@ class ODPresentation implements ReaderInterface
             if ($oNodeParagraph instanceof DOMElement) {
                 $this->readParagraphItem($oParagraph, $oNodeParagraph);
             }
+            $this->endParagraph($oParagraph);
             // a line break of a paragraph is a line of the text, as a paragraph is
             $text[] = str_replace("\r\n", "\n", $oParagraph->getPlainText());
         }
@@ -1990,6 +1998,25 @@ class ODPresentation implements ReaderInterface
             }
         }
         $this->readParagraphItem($oParagraph, $oNodeParent);
+        $this->endParagraph($oParagraph);
+    }
+
+    /**
+     * End a paragraph. The white space it ends with is not text of it, says OpenDocument, and an
+     * indented file has it after every paragraph; LibreOffice 26.8 reads a space there.
+     */
+    private function endParagraph(Paragraph $oParagraph): void
+    {
+        $elements = $oParagraph->getRichTextElements();
+        $oLast = end($elements);
+        if ($this->ignoreSpace && false !== $oLast && ' ' === substr($oLast->getText(), -1)) {
+            $text = substr($oLast->getText(), 0, -1);
+            $oLast->setText($text);
+            if ('' === $text) {
+                $oParagraph->setRichTextElements(array_slice($elements, 0, -1));
+            }
+        }
+        $this->ignoreSpace = true;
     }
 
     /**
@@ -2015,15 +2042,22 @@ class ODPresentation implements ReaderInterface
             // A link and a field are a run of their own; a field is a run whose text the reading
             // application recomputes, and it holds the text it stands in for
             $isRun = 'text:a' === $name || isset(self::FIELD_OOXML[$name]);
-            if (!$oNode instanceof DOMElement) {
-                // White space with a line feed, at an end of a text, is how the file is laid out,
-                // and so is a paragraph of nothing but white space; a span of it is text
-                $isWhole = $oNodeParent->childNodes->length < 2;
-                $text = !in_array($oNode->nodeType, [XML_TEXT_NODE, XML_CDATA_SECTION_NODE], true) ? null : $oNode->nodeValue;
-                if (null !== $text && !($isSpan && $isWhole)) {
-                    $text = preg_replace('/^\s*[\r\n]\s*|\s*[\r\n]\s*$/', '', $text);
-                    $text = '' === ($isWhole ? trim((string) $text) : $text) ? null : $text;
+            $isText = in_array($oNode->nodeType, [XML_TEXT_NODE, XML_CDATA_SECTION_NODE], true);
+            if ($isText) {
+                // White space is collapsed as OpenDocument says, and as LibreOffice reads it:
+                // spaces, tabs and line feeds in a row are one space, whatever spans they are
+                // spread over, and none at the start of the paragraph
+                $text = $oNode->nodeValue;
+                if ('' !== $text) {
+                    $text = (string) preg_replace('/[ \t\r\n]+/', ' ', $text);
+                    $text = $this->ignoreSpace ? ltrim($text, ' ') : $text;
+                    if ('' === $text) {
+                        continue;
+                    }
+                    $this->ignoreSpace = ' ' === substr($text, -1);
                 }
+            } elseif (!$oNode instanceof DOMElement) {
+                continue;
             } elseif ($isRun) {
                 $text = $oNode->textContent;
             } elseif ('text:s' === $name) {
@@ -2034,6 +2068,7 @@ class ODPresentation implements ReaderInterface
                 // a note and a comment are not text of the paragraph
                 if ('text:line-break' === $name) {
                     $oParagraph->createBreak();
+                    $this->ignoreSpace = false;
                 } elseif ('text:span' === $name) {
                     $this->readParagraphItem($oParagraph, $oNode, $keyStyle);
                 }
@@ -2045,6 +2080,8 @@ class ODPresentation implements ReaderInterface
             if (null === $text) {
                 continue;
             }
+            // a space after anything but a space of the text is one more
+            $this->ignoreSpace = $this->ignoreSpace && $isText;
             if (null === $oTextRun || $isRun) {
                 $oTextRun = isset(self::FIELD_OOXML[$name])
                     ? $oParagraph->createField(self::FIELD_OOXML[$name])
@@ -2111,6 +2148,7 @@ class ODPresentation implements ReaderInterface
                 $this->readParagraphItem($oParagraph, $oNodeRichTextElement);
             }
         }
+        $this->endParagraph($oParagraph);
     }
 
     /**
