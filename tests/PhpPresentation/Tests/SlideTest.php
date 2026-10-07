@@ -24,6 +24,8 @@ use PhpOffice\PhpPresentation\Exception\InvalidParameterException;
 use PhpOffice\PhpPresentation\Exception\OutOfBoundsException;
 use PhpOffice\PhpPresentation\PhpPresentation;
 use PhpOffice\PhpPresentation\Shape\Drawing\File;
+use PhpOffice\PhpPresentation\Shape\Group;
+use PhpOffice\PhpPresentation\Shape\RichText;
 use PhpOffice\PhpPresentation\ShapeContainerInterface;
 use PhpOffice\PhpPresentation\Slide;
 use PhpOffice\PhpPresentation\Slide\AbstractBackground;
@@ -94,6 +96,62 @@ class SlideTest extends TestCase
         self::assertInstanceOf(Slide::class, $object->setAnimations([$oStub]));
         self::assertIsArray($object->getAnimations());
         self::assertCount(1, $object->getAnimations());
+    }
+
+    public function testCopy(): void
+    {
+        $presentation = new PhpPresentation();
+        $object = $presentation->getActiveSlide();
+        $shape = $object->createRichTextShape();
+        $group = $object->createGroup();
+        $shapeInGroup = $group->createRichTextShape();
+        $shapeInNote = $object->getNote()->createRichTextShape();
+        $object->addAnimation((new Animation())->addShape($shape)->addShape($shapeInGroup));
+
+        $copy = $presentation->addSlide($object->copy());
+        [$shapeCopy, $groupCopy] = $copy->getShapeCollection();
+        self::assertInstanceOf(Group::class, $groupCopy);
+        $shapeInGroupCopy = $groupCopy->getShapeCollection()[0];
+
+        // The copy is another slide of the same presentation
+        self::assertSame($presentation, $copy->getParent());
+        self::assertSame($object->getSlideLayout(), $copy->getSlideLayout());
+        self::assertSame(0, $presentation->getIndex($object));
+        self::assertSame(1, $presentation->getIndex($copy));
+        // Its shapes are its own
+        self::assertCount(2, $copy->getShapeCollection());
+        self::assertNotSame($shape, $shapeCopy);
+        self::assertSame($copy, $shapeCopy->getContainer());
+        self::assertNotSame($group, $groupCopy);
+        self::assertSame($copy, $groupCopy->getContainer());
+        self::assertCount(1, $groupCopy->getShapeCollection());
+        self::assertNotSame($shapeInGroup, $shapeInGroupCopy);
+        self::assertSame($groupCopy, $shapeInGroupCopy->getContainer());
+        // So is its note
+        self::assertNotSame($object->getNote(), $copy->getNote());
+        self::assertSame($copy, $copy->getNote()->getParent());
+        self::assertCount(1, $copy->getNote()->getShapeCollection());
+        self::assertNotSame($shapeInNote, $copy->getNote()->getShapeCollection()[0]);
+        self::assertSame($copy->getNote(), $copy->getNote()->getShapeCollection()[0]->getContainer());
+        // Its animations play its shapes
+        self::assertNotSame($object->getAnimations()[0], $copy->getAnimations()[0]);
+        self::assertSame([$shapeCopy, $shapeInGroupCopy], $copy->getAnimations()[0]->getShapeCollection());
+        // The slide copied keeps what it had
+        self::assertSame($object, $shape->getContainer());
+        self::assertSame($group, $shapeInGroup->getContainer());
+        self::assertSame($object, $object->getNote()->getParent());
+        self::assertSame([$shape, $shapeInGroup], $object->getAnimations()[0]->getShapeCollection());
+    }
+
+    public function testCopyWithoutParent(): void
+    {
+        $object = new Slide();
+        $shapeNotOnTheSlide = new RichText();
+        $object->addAnimation((new Animation())->addShape($shapeNotOnTheSlide));
+
+        $copy = $object->copy();
+        self::assertNull($copy->getParent());
+        self::assertSame([$shapeNotOnTheSlide], $copy->getAnimations()[0]->getShapeCollection());
     }
 
     public function testBackground(): void
