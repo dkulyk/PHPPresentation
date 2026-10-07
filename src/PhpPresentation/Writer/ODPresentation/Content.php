@@ -73,6 +73,16 @@ class Content extends AbstractDecoratorWriter
     ];
 
     /**
+     * Where the text of a table cell sits between its top and its bottom, as `style:vertical-align`
+     * says it. Any other value is left to the reading application.
+     */
+    private const CELL_VERTICAL_ALIGN = [
+        Alignment::VERTICAL_TOP => 'top',
+        Alignment::VERTICAL_CENTER => 'middle',
+        Alignment::VERTICAL_BOTTOM => 'bottom',
+    ];
+
+    /**
      * The element each kind of field writes its text with, where OpenDocument has one.
      *
      * The dated formats are not here: they are resolved by their prefix, since OOXML numbers
@@ -1125,11 +1135,11 @@ class Content extends AbstractDecoratorWriter
                         $objWriter->writeAttributeIf($colSpan > 1, 'table:number-columns-spanned', $colSpan);
                         $objWriter->writeAttributeIf($rowSpan > 1, 'table:number-rows-spanned', $rowSpan);
 
-                        // text:p
-                        $objWriter->startElement('text:p');
-
-                        // text:span
                         foreach ($shapeCell->getParagraphs() as $shapeParagraph) {
+                            // text:p
+                            $objWriter->startElement('text:p');
+                            $objWriter->writeAttribute('text:style-name', $this->getAutomaticStyleName($shapeParagraph));
+
                             foreach ($shapeParagraph->getRichTextElements() as $shapeRichText) {
                                 if ($shapeRichText instanceof TextElement) {
                                     // text:span
@@ -1157,10 +1167,10 @@ class Content extends AbstractDecoratorWriter
                                     $objWriter->endElement();
                                 }
                             }
-                        }
 
-                        // > text:p
-                        $objWriter->endElement();
+                            // > text:p
+                            $objWriter->endElement();
+                        }
 
                         // > table:table-cell
                         $objWriter->endElement();
@@ -1841,6 +1851,31 @@ class Content extends AbstractDecoratorWriter
                     }
                     // >style:graphic-properties
 
+                    // style:table-cell-properties
+                    // As the PowerPoint2007 Writer does, a cell takes its padding and where its text
+                    // sits between its top and its bottom from the alignment of its first paragraph
+                    $cellParagraphs = $shapeCell->getParagraphs();
+                    if ([] !== $cellParagraphs) {
+                        $cellAlignment = reset($cellParagraphs)->getAlignment();
+                        $objWriter->startElement('style:table-cell-properties');
+                        $objWriter->writeAttributeIf(
+                            isset(self::CELL_VERTICAL_ALIGN[$cellAlignment->getVertical()]),
+                            'style:vertical-align',
+                            self::CELL_VERTICAL_ALIGN[$cellAlignment->getVertical()] ?? ''
+                        );
+                        // six decimals, as for the insets of a text box
+                        foreach ([
+                            'fo:padding-bottom' => $cellAlignment->getMarginBottom(),
+                            'fo:padding-left' => $cellAlignment->getMarginLeft(),
+                            'fo:padding-right' => $cellAlignment->getMarginRight(),
+                            'fo:padding-top' => $cellAlignment->getMarginTop(),
+                        ] as $attribute => $margin) {
+                            $objWriter->writeAttribute($attribute, round($margin / CommonDrawing::DPI_96 * 2.54, 6) . 'cm');
+                        }
+                        $objWriter->endElement();
+                    }
+                    // >style:table-cell-properties
+
                     // style:paragraph-properties
                     $objWriter->startElement('style:paragraph-properties');
                     $cellBorders = $shapeCell->getBorders();
@@ -1860,6 +1895,7 @@ class Content extends AbstractDecoratorWriter
                 }, $shapeCell);
 
                 foreach ($shapeCell->getParagraphs() as $shapeParagraph) {
+                    $this->addParagraphStyle($shapeParagraph);
                     foreach ($shapeParagraph->getRichTextElements() as $shapeRichText) {
                         if ($shapeRichText instanceof Run) {
                             // Style des font text

@@ -2070,6 +2070,87 @@ class ODPresentationTest extends TestCase
         ], $this->getTableSpans($oTableRead));
     }
 
+    public function testTableCellTextLayoutSurvivesTheRoundTrip(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oRow = $oPhpPresentation->getActiveSlide()->createTableShape(2)->createRow();
+        $oCell = $oRow->getCell(0);
+        $oCell->createTextRun('first');
+        $oCell->getActiveParagraph()->getAlignment()
+            ->setVertical(Alignment::VERTICAL_BOTTOM)
+            ->setMarginLeft(40)->setMarginRight(10)->setMarginTop(20)->setMarginBottom(5);
+        $oCell->createParagraph()->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $oCell->createTextRun('second');
+        $oRow->getCell(1)->createTextRun('plain');
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new ODPresentationWriter($oPhpPresentation))->save($file);
+        $oPhpPresentationRead = (new ODPresentation())->load($file);
+        unlink($file);
+
+        $oTableRead = array_values((array) $oPhpPresentationRead->getActiveSlide()->getShapeCollection())[0];
+        self::assertInstanceOf(Table::class, $oTableRead);
+        // Every paragraph of a cell is a paragraph of its own, with its alignment
+        $oCellRead = $oTableRead->getRow(0)->getCell(0);
+        self::assertCount(2, $oCellRead->getParagraphs());
+        self::assertEquals('first', $oCellRead->getParagraph(0)->getPlainText());
+        self::assertEquals('second', $oCellRead->getParagraph(1)->getPlainText());
+        self::assertEquals(Alignment::HORIZONTAL_LEFT, $oCellRead->getParagraph(0)->getAlignment()->getHorizontal());
+        self::assertEquals(Alignment::HORIZONTAL_CENTER, $oCellRead->getParagraph(1)->getAlignment()->getHorizontal());
+        // The padding of the cell and its vertical alignment are those of its first paragraph
+        $oAlignment = $oCellRead->getParagraph(0)->getAlignment();
+        self::assertEquals(Alignment::VERTICAL_BOTTOM, $oAlignment->getVertical());
+        self::assertEquals(40, $oAlignment->getMarginLeft());
+        self::assertEquals(10, $oAlignment->getMarginRight());
+        self::assertEquals(20, $oAlignment->getMarginTop());
+        self::assertEquals(5, $oAlignment->getMarginBottom());
+        // and are not those of a cell whose paragraph wears the same paragraph style
+        $oAlignment = $oTableRead->getRow(0)->getCell(1)->getParagraph(0)->getAlignment();
+        self::assertEquals(Alignment::VERTICAL_BASE, $oAlignment->getVertical());
+        self::assertEquals(0, $oAlignment->getMarginLeft());
+    }
+
+    public function testTableCellTextLayoutWrittenByLibreOffice(): void
+    {
+        // LibreOffice 26.8 writes the padding and the vertical alignment of a cell in a
+        // `loext:graphic-properties` of the cell style
+        $file = PHPPRESENTATION_TESTS_BASE_DIR . '/resources/files/ODP_Table_Cell_Layout.odp';
+        $oPhpPresentation = (new ODPresentation())->load($file);
+
+        $oTable = array_values((array) $oPhpPresentation->getActiveSlide()->getShapeCollection())[0];
+        self::assertInstanceOf(Table::class, $oTable);
+        $oAlignment = $oTable->getRow(0)->getCell(0)->getParagraph(0)->getAlignment();
+        self::assertEquals(Alignment::VERTICAL_TOP, $oAlignment->getVertical());
+        self::assertEqualsWithDelta(40, $oAlignment->getMarginLeft(), 0.05);
+        self::assertEqualsWithDelta(10, $oAlignment->getMarginRight(), 0.05);
+        self::assertEqualsWithDelta(20, $oAlignment->getMarginTop(), 0.05);
+        self::assertEqualsWithDelta(5, $oAlignment->getMarginBottom(), 0.05);
+
+        $oCell = $oTable->getRow(0)->getCell(1);
+        self::assertEquals(Alignment::VERTICAL_CENTER, $oCell->getParagraph(0)->getAlignment()->getVertical());
+        self::assertEquals(Alignment::HORIZONTAL_CENTER, $oCell->getParagraph(0)->getAlignment()->getHorizontal());
+        self::assertEquals(Alignment::HORIZONTAL_RIGHT, $oCell->getParagraph(1)->getAlignment()->getHorizontal());
+        self::assertEquals(Alignment::VERTICAL_BOTTOM, $oTable->getRow(0)->getCell(2)->getParagraph(0)->getAlignment()->getVertical());
+    }
+
+    public function testTableCellPaddingShorthand(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oPhpPresentation->getActiveSlide()->createTableShape(1)->createRow();
+
+        // One `fo:padding` for the four sides, in a unit other than the centimetre
+        $oTableRead = $this->readTableWithContent(
+            $oPhpPresentation,
+            '#(<style:table-cell-properties)[^>]*/>#',
+            '$1 style:vertical-align="middle" fo:padding="0.5in" fo:padding-top="2mm"/>'
+        );
+        $oAlignment = $oTableRead->getRow(0)->getCell(0)->getParagraph(0)->getAlignment();
+        self::assertEquals(Alignment::VERTICAL_CENTER, $oAlignment->getVertical());
+        self::assertEquals(48, $oAlignment->getMarginLeft());
+        self::assertEquals(48, $oAlignment->getMarginBottom());
+        self::assertEqualsWithDelta(7.5591, $oAlignment->getMarginTop(), 0.0001);
+    }
+
     /**
      * Save a presentation, rewrite its `content.xml` and read back the table of its first slide.
      */
