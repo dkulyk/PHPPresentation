@@ -326,6 +326,8 @@ class ObjectsChart extends AbstractDecoratorWriter
         $this->xmlContent->writeAttribute('fo:font-size', $font->getSize() . 'pt');
         $this->xmlContent->writeAttribute('fo:font-style', $font->isItalic() ? 'italic' : 'normal');
         $this->xmlContent->writeAttributeIf($font->isBold(), 'fo:font-weight', 'bold');
+        // a chart is a document of its own, which the language of the presentation does not reach
+        $this->writeLanguage($this->xmlContent, $this->getPresentation()->getDocumentProperties()->getLanguage(), '');
         $this->writeFontStates($this->xmlContent, $font);
         $this->xmlContent->endElement();
     }
