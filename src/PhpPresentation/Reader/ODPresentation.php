@@ -729,9 +729,9 @@ class ODPresentation implements ReaderInterface
             }
         }
 
-        // A table cell says its padding and where its text sits between its top and its bottom on
-        // `style:table-cell-properties`, which is where ODF has them. LibreOffice reads them there
-        // and writes them in the graphic properties, as the insets of a text box
+        // A table cell says its fill, its padding and where its text sits between its top and its
+        // bottom on `style:table-cell-properties`, which is where ODF has them. LibreOffice reads
+        // them there and writes them in the graphic properties, as it does for a text box
         $nodeTableCellProps = $this->oXMLReader->getElement('style:table-cell-properties', $nodeStyle);
         if ($nodeTableCellProps instanceof DOMElement) {
             $padding = function (string $side) use ($nodeTableCellProps): ?float {
@@ -744,6 +744,16 @@ class ODPresentation implements ReaderInterface
             $insetRight = $padding('right') ?? $insetRight ?? null;
             $insetTop = $padding('top') ?? $insetTop ?? null;
             $verticalAlign = self::VERTICAL_ALIGN[$nodeTableCellProps->getAttribute('style:vertical-align')] ?? $verticalAlign ?? null;
+            // The fill of a cell, `transparent` being a fill refused
+            if ($nodeTableCellProps->hasAttribute('fo:background-color')) {
+                $backgroundColor = $nodeTableCellProps->getAttribute('fo:background-color');
+                $oFill = new Fill();
+                if ('transparent' === $backgroundColor) {
+                    $oFill->setFillType(Fill::FILL_NONE);
+                } else {
+                    $oFill->setFillType(Fill::FILL_SOLID)->setStartColor(new Color('FF' . substr($backgroundColor, 1)));
+                }
+            }
         }
 
         $nodeTextProperties = $this->oXMLReader->getElement('style:text-properties', $nodeStyle);
