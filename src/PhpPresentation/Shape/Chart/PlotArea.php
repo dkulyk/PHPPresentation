@@ -169,7 +169,7 @@ class PlotArea implements ComparableInterface
     /**
      * Set Width (as a fraction of the chart).
      */
-    public function setWidth(int $pValue = 0): self
+    public function setWidth(float $pValue = 0): self
     {
         $this->width = $pValue;
 
