@@ -274,7 +274,7 @@ abstract class AbstractSlide extends AbstractDecoratorWriter
         // p:sp\p:nvSpPr\p:cNvPr
         $objWriter->startElement('p:cNvPr');
         $objWriter->writeAttribute('id', $shapeId);
-        if ($shape->isPlaceholder()) {
+        if ($shape->isPlaceholder() && '' === $shape->getName()) {
             $objWriter->writeAttribute('name', 'Placeholder for ' . $shape->getPlaceholder()->getType());
         } else {
             $objWriter->writeAttribute('name', $shape->getName());
@@ -289,7 +289,7 @@ abstract class AbstractSlide extends AbstractDecoratorWriter
         $objWriter->endElement();
         // p:sp\p:nvSpPr\p:cNvSpPr
         $objWriter->startElement('p:cNvSpPr');
-        $objWriter->writeAttribute('txBox', '1');
+        $objWriter->writeAttributeIf(!$shape->isPlaceholder(), 'txBox', '1');
         $objWriter->endElement();
         // p:sp\p:nvSpPr\p:nvPr
         if ($shape->isPlaceholder()) {
