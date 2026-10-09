@@ -23,7 +23,6 @@ namespace PhpOffice\PhpPresentation\Writer\PowerPoint2007;
 use PhpOffice\Common\Adapter\Zip\ZipInterface;
 use PhpOffice\Common\XMLWriter;
 use PhpOffice\PhpPresentation\Shape\Comment;
-use PhpOffice\PhpPresentation\Shape\Comment\Author;
 
 class Relationships extends AbstractDecoratorWriter
 {
@@ -128,10 +127,6 @@ class Relationships extends AbstractDecoratorWriter
         foreach ($this->getPresentation()->getAllSlides() as $oSlide) {
             foreach ($this->flattenShapes($oSlide->getShapeCollection()) as $oShape) {
                 if (!($oShape instanceof Comment)) {
-                    continue;
-                }
-                $oAuthor = $oShape->getAuthor();
-                if (!($oAuthor instanceof Author)) {
                     continue;
                 }
                 $this->writeRelationship($objWriter, $relationId++, 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/commentAuthors', 'commentAuthors.xml');

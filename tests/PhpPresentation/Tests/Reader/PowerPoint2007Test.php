@@ -2887,4 +2887,64 @@ class PowerPoint2007Test extends TestCase
         }
         self::assertSame([['First', 'Sam', 'S'], ['Second', 'Sam', 'S']], $read);
     }
+
+    public function testCommentsWithoutAuthorAreReadWithoutAuthor(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oSlide = $oPhpPresentation->getActiveSlide();
+        $oSlide->addShape((new Comment())->setText('Alice')->setAuthor((new Comment\Author())->setName('Alice Example')));
+        $oSlide->addShape((new Comment())->setText('Nobody'));
+        $oSlide->addShape((new Comment())->setText('Nameless')->setAuthor(new Comment\Author()));
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new PowerPoint2007Writer($oPhpPresentation))->save($file);
+        $oPhpPresentationRead = (new PowerPoint2007())->load($file);
+
+        // LibreOffice gives the author without a name an id of its own
+        $xmlns = 'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"';
+        $oZip = new ZipArchive();
+        $oZip->open($file);
+        $oZip->deleteName('ppt/commentAuthors.xml');
+        $oZip->addFromString('ppt/commentAuthors.xml', '<p:cmAuthorLst ' . $xmlns . '><p:cmAuthor id="1" name="" initials="" lastIdx="2" clrIdx="1"/><p:cmAuthor id="0" name="Alice Example" initials="AE" lastIdx="1" clrIdx="0"/></p:cmAuthorLst>');
+        $oZip->deleteName('ppt/comments/comment1.xml');
+        $oZip->addFromString('ppt/comments/comment1.xml', '<p:cmLst ' . $xmlns . '>'
+            . '<p:cm authorId="0" idx="1"><p:pos x="0" y="0"/><p:text>Alice</p:text></p:cm>'
+            . '<p:cm authorId="1" idx="1"><p:pos x="0" y="0"/><p:text>Nobody</p:text></p:cm>'
+            . '<p:cm authorId="1" idx="2"><p:pos x="0" y="0"/><p:text>Nameless</p:text></p:cm>'
+            . '</p:cmLst>');
+        $oZip->close();
+        $oPhpPresentationLibreOffice = (new PowerPoint2007())->load($file);
+        unlink($file);
+
+        foreach ([$oPhpPresentationRead, $oPhpPresentationLibreOffice] as $oPresentation) {
+            $read = [];
+            foreach ($oPresentation->getActiveSlide()->getShapeCollection() as $oShape) {
+                self::assertInstanceOf(Comment::class, $oShape);
+                $read[] = [$oShape->getText(), null === $oShape->getAuthor() ? null : $oShape->getAuthor()->getName()];
+            }
+            self::assertSame([['Alice', 'Alice Example'], ['Nobody', null], ['Nameless', null]], $read);
+        }
+    }
+
+    public function testAuthorsWithOnlyANameOrOnlyInitialsStayAuthors(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oSlide = $oPhpPresentation->getActiveSlide();
+        $oSlide->addShape((new Comment())->setText('Name')->setAuthor((new Comment\Author())->setName('Solo')));
+        $oSlide->addShape((new Comment())->setText('Initials')->setAuthor((new Comment\Author())->setInitials('X')));
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new PowerPoint2007Writer($oPhpPresentation))->save($file);
+        $oPhpPresentationRead = (new PowerPoint2007())->load($file);
+        unlink($file);
+
+        $read = [];
+        foreach ($oPhpPresentationRead->getActiveSlide()->getShapeCollection() as $oShape) {
+            self::assertInstanceOf(Comment::class, $oShape);
+            $oAuthor = $oShape->getAuthor();
+            self::assertInstanceOf(Comment\Author::class, $oAuthor);
+            $read[] = [$oShape->getText(), $oAuthor->getName(), $oAuthor->getInitials(), $oAuthor->getIndex()];
+        }
+        self::assertSame([['Name', 'Solo', '', 0], ['Initials', '', 'X', 1]], $read);
+    }
 }

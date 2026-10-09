@@ -56,10 +56,56 @@ class CommentAuthorsTest extends PhpPresentationTestCase
 
     public function testWithoutCommentAuthor(): void
     {
-        $oComment = new Comment();
-        $this->oPresentation->getActiveSlide()->addShape($oComment);
+        $oAuthor = (new Comment\Author())->setName('Name')->setInitials('Initials');
+        $this->oPresentation->getActiveSlide()->addShape((new Comment())->setAuthor($oAuthor));
+        $this->oPresentation->getActiveSlide()->addShape(new Comment());
 
-        $this->assertZipFileNotExists('ppt/commentAuthors.xml');
+        // The comment without an author is written with an author without a name, which is not the first one
+        $this->assertZipXmlElementCount('ppt/commentAuthors.xml', '/p:cmAuthorLst/p:cmAuthor', 2);
+        $this->assertZipXmlElementExists('ppt/commentAuthors.xml', '/p:cmAuthorLst/p:cmAuthor[@id="0"][@name=""][@initials=""][@lastIdx="1"]');
+        $this->assertZipXmlElementExists('ppt/commentAuthors.xml', '/p:cmAuthorLst/p:cmAuthor[@id="1"][@name="Name"][@initials="Initials"][@lastIdx="1"]');
+        $this->assertZipXmlAttributeEquals('ppt/comments/comment1.xml', '/p:cmLst/p:cm[1]', 'authorId', 1);
+        $this->assertZipXmlAttributeEquals('ppt/comments/comment1.xml', '/p:cmLst/p:cm[2]', 'authorId', 0);
+        $this->assertIsSchemaECMA376Valid();
+    }
+
+    public function testWithoutAnyCommentAuthor(): void
+    {
+        $this->oPresentation->getActiveSlide()->addShape(new Comment());
+
+        // The content types name the part, so it has to be there and to be related
+        $this->assertZipFileExists('ppt/commentAuthors.xml');
+        $this->assertZipXmlElementExists('ppt/_rels/presentation.xml.rels', '/Relationships/Relationship[@Target="commentAuthors.xml"]');
+        $this->assertZipXmlElementExists('ppt/commentAuthors.xml', '/p:cmAuthorLst/p:cmAuthor[@id="0"][@name=""]');
+        $this->assertIsSchemaECMA376Valid();
+    }
+
+    public function testWithAnAuthorWithoutNameAndInitials(): void
+    {
+        // An author with neither a name nor initials is the author of the comments without one
+        $this->oPresentation->getActiveSlide()->addShape((new Comment())->setAuthor(new Comment\Author()));
+        $this->oPresentation->getActiveSlide()->addShape(new Comment());
+        $this->oPresentation->getActiveSlide()->addShape(new Comment());
+
+        $this->assertZipXmlElementCount('ppt/commentAuthors.xml', '/p:cmAuthorLst/p:cmAuthor', 1);
+        $this->assertZipXmlElementExists('ppt/commentAuthors.xml', '/p:cmAuthorLst/p:cmAuthor[@id="0"][@name=""][@initials=""][@lastIdx="3"]');
+        $this->assertZipXmlAttributeEquals('ppt/comments/comment1.xml', '/p:cmLst/p:cm[1]', 'authorId', 0);
+        $this->assertZipXmlAttributeEquals('ppt/comments/comment1.xml', '/p:cmLst/p:cm[2]', 'authorId', 0);
+        $this->assertIsSchemaECMA376Valid();
+    }
+
+    public function testWithEqualAuthors(): void
+    {
+        // Two authors of one name and initials are one author, and both carry its id
+        $oSlide = $this->oPresentation->createSlide();
+        $this->oPresentation->getActiveSlide()->addShape((new Comment())->setAuthor((new Comment\Author())->setName('Other')));
+        $this->oPresentation->getActiveSlide()->addShape((new Comment())->setAuthor((new Comment\Author())->setName('Name')));
+        $oSlide->addShape((new Comment())->setAuthor((new Comment\Author())->setName('Name')));
+
+        $this->assertZipXmlElementCount('ppt/commentAuthors.xml', '/p:cmAuthorLst/p:cmAuthor', 2);
+        $this->assertZipXmlElementExists('ppt/commentAuthors.xml', '/p:cmAuthorLst/p:cmAuthor[@id="1"][@name="Name"][@lastIdx="2"][@clrIdx="1"]');
+        $this->assertZipXmlAttributeEquals('ppt/comments/comment1.xml', '/p:cmLst/p:cm[2]', 'authorId', 1);
+        $this->assertZipXmlAttributeEquals('ppt/comments/comment2.xml', '/p:cmLst/p:cm', 'authorId', 1);
         $this->assertIsSchemaECMA376Valid();
     }
 
