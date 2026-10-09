@@ -75,7 +75,12 @@ class File extends AbstractDrawingAdapter
 
     public function getContents(): string
     {
-        return CommonFile::fileGetContents($this->getPath());
+        $contents = CommonFile::fileGetContents($this->getPath());
+        if (null === $contents) {
+            throw new FileNotFoundException($this->getPath());
+        }
+
+        return $contents;
     }
 
     public function getExtension(): string
