@@ -40,6 +40,7 @@ use PhpOffice\PhpPresentation\Shape\Chart\Type\Pie;
 use PhpOffice\PhpPresentation\Shape\Chart\Type\Pie3D;
 use PhpOffice\PhpPresentation\Shape\Chart\Type\Radar;
 use PhpOffice\PhpPresentation\Shape\Chart\Type\Scatter;
+use PhpOffice\PhpPresentation\Shape\Comment;
 use PhpOffice\PhpPresentation\Shape\Drawing\Base64;
 use PhpOffice\PhpPresentation\Shape\Drawing\Gd;
 use PhpOffice\PhpPresentation\Shape\Group;
@@ -2759,5 +2760,131 @@ class PowerPoint2007Test extends TestCase
             'EMF' => ['inkscape_shapes.emf', 'emf', 'image/x-emf'],
             'EMF+' => ['inkscape_shapes_emfplus.emf', 'emf', 'image/x-emf'],
         ];
+    }
+
+    public function testCommentsSurviveTheRoundTrip(): void
+    {
+        $oAuthorAlice = (new Comment\Author())->setName('Alice Example')->setInitials('AE');
+        $oAuthorBob = (new Comment\Author())->setName('Bob Sample')->setInitials('BS');
+
+        $oPhpPresentation = new PhpPresentation();
+        $oPhpPresentation->getActiveSlide()->createRichTextShape()->createTextRun('Text');
+        $oPhpPresentation->getActiveSlide()->addShape(
+            (new Comment())->setText('First <&> comment')->setAuthor($oAuthorAlice)->setDate(1709547072)->setOffsetX(100)->setOffsetY(200)
+        );
+        $oSlide = $oPhpPresentation->createSlide();
+        $oSlide->addShape((new Comment())->setText("Second\ncomment")->setAuthor($oAuthorBob)->setDate(1703984523)->setOffsetX(10)->setOffsetY(20));
+        $oSlide->addShape((new Comment())->setText('Third comment')->setAuthor($oAuthorAlice)->setDate(1735693323)->setOffsetX(31)->setOffsetY(47));
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new PowerPoint2007Writer($oPhpPresentation))->save($file);
+        $oPhpPresentationRead = (new PowerPoint2007())->load($file);
+        unlink($file);
+
+        $read = [];
+        $oAuthors = [];
+        foreach ($oPhpPresentationRead->getAllSlides() as $idxSlide => $oSlide) {
+            foreach ($oSlide->getShapeCollection() as $oShape) {
+                if ($oShape instanceof Comment) {
+                    $oAuthor = $oShape->getAuthor();
+                    self::assertInstanceOf(Comment\Author::class, $oAuthor);
+                    $oAuthors[] = $oAuthor;
+                    $read[] = [$idxSlide, $oAuthor->getName(), $oAuthor->getInitials(), $oShape->getText(), $oShape->getDate(), $oShape->getOffsetX(), $oShape->getOffsetY()];
+                }
+            }
+        }
+        self::assertSame([
+            [0, 'Alice Example', 'AE', 'First <&> comment', 1709547072, 100, 200],
+            [1, 'Bob Sample', 'BS', "Second\ncomment", 1703984523, 10, 20],
+            [1, 'Alice Example', 'AE', 'Third comment', 1735693323, 31, 47],
+        ], $read);
+        // The comments of one author share that author
+        self::assertSame($oAuthors[0], $oAuthors[2]);
+        self::assertCount(2, $oPhpPresentationRead->getSlide(0)->getShapeCollection());
+    }
+
+    public function testCommentsAreReadTheWayLibreOfficeWritesThem(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oPhpPresentation->getActiveSlide()->addShape((new Comment())->setAuthor(new Comment\Author()));
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new PowerPoint2007Writer($oPhpPresentation))->save($file);
+
+        // LibreOffice lists the authors in an order of its own, writes no date for a comment that
+        // has none, and puts the whole list on one line; the last comment names an author nobody listed
+        $xmlns = 'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"';
+        $oZip = new ZipArchive();
+        $oZip->open($file);
+        $oZip->deleteName('ppt/commentAuthors.xml');
+        $oZip->addFromString('ppt/commentAuthors.xml', '<p:cmAuthorLst ' . $xmlns . '><p:cmAuthor id="1" name="Bob Sample" initials="BS" lastIdx="1" clrIdx="1"/><p:cmAuthor id="0" name="Alice Example" initials="AE" lastIdx="2" clrIdx="0"/></p:cmAuthorLst>');
+        $oZip->deleteName('ppt/comments/comment1.xml');
+        $oZip->addFromString('ppt/comments/comment1.xml', '<p:cmLst ' . $xmlns . '>'
+            . '<p:cm authorId="1" dt="2023-12-31T01:02:03.000000000" idx="1"><p:pos x="720" y="1080"/><p:text>Second&#10;comment</p:text></p:cm>'
+            . '<p:cm authorId="0" idx="2"><p:pos x="360" y="360"/><p:text>Third comment</p:text></p:cm>'
+            . '<p:cm authorId="7" dt="2024-03-04T10:11:12.000000000" idx="1"><p:text/></p:cm>'
+            . '</p:cmLst>');
+        $oZip->close();
+
+        $before = time();
+        $oPhpPresentationRead = (new PowerPoint2007())->load($file);
+        unlink($file);
+
+        $oShapes = $oPhpPresentationRead->getActiveSlide()->getShapeCollection();
+        self::assertCount(3, $oShapes);
+        self::assertContainsOnlyInstancesOf(Comment::class, $oShapes);
+        /** @var Comment[] $oShapes */
+        $oAuthor = $oShapes[0]->getAuthor();
+        self::assertInstanceOf(Comment\Author::class, $oAuthor);
+        self::assertSame(['Bob Sample', 'BS', 1], [$oAuthor->getName(), $oAuthor->getInitials(), $oAuthor->getIndex()]);
+        self::assertSame("Second\ncomment", $oShapes[0]->getText());
+        self::assertSame(strtotime('2023-12-31T01:02:03'), $oShapes[0]->getDate());
+        self::assertSame([120, 180], [$oShapes[0]->getOffsetX(), $oShapes[0]->getOffsetY()]);
+
+        $oAuthor = $oShapes[1]->getAuthor();
+        self::assertInstanceOf(Comment\Author::class, $oAuthor);
+        self::assertSame('Alice Example', $oAuthor->getName());
+        self::assertGreaterThanOrEqual($before, $oShapes[1]->getDate());
+        self::assertSame([60, 60], [$oShapes[1]->getOffsetX(), $oShapes[1]->getOffsetY()]);
+
+        self::assertNull($oShapes[2]->getAuthor());
+        self::assertSame('', $oShapes[2]->getText());
+        self::assertSame([0, 0], [$oShapes[2]->getOffsetX(), $oShapes[2]->getOffsetY()]);
+    }
+
+    public function testCommentsOfTwoAuthorsOfOneNameKeepTheirAuthor(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oPhpPresentation->getActiveSlide()->addShape((new Comment())->setAuthor(new Comment\Author()));
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new PowerPoint2007Writer($oPhpPresentation))->save($file);
+
+        $xmlns = 'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"';
+        $oZip = new ZipArchive();
+        $oZip->open($file);
+        $oZip->deleteName('ppt/commentAuthors.xml');
+        $oZip->addFromString('ppt/commentAuthors.xml', '<p:cmAuthorLst ' . $xmlns . '><p:cmAuthor id="5" name="Sam" initials="S" lastIdx="1" clrIdx="0"/><p:cmAuthor id="9" name="Sam" initials="S" lastIdx="1" clrIdx="1"/></p:cmAuthorLst>');
+        $oZip->deleteName('ppt/comments/comment1.xml');
+        $oZip->addFromString('ppt/comments/comment1.xml', '<p:cmLst ' . $xmlns . '>'
+            . '<p:cm authorId="5" idx="1"><p:pos x="0" y="0"/><p:text>First</p:text></p:cm>'
+            . '<p:cm authorId="9" idx="1"><p:pos x="0" y="0"/><p:text>Second</p:text></p:cm>'
+            . '</p:cmLst>');
+        $oZip->close();
+
+        // The Writer takes two authors of one name and initials for one author
+        $oPhpPresentationRead = (new PowerPoint2007())->load($file);
+        (new PowerPoint2007Writer($oPhpPresentationRead))->save($file);
+        $oPhpPresentationRead = (new PowerPoint2007())->load($file);
+        unlink($file);
+
+        $read = [];
+        foreach ($oPhpPresentationRead->getActiveSlide()->getShapeCollection() as $oShape) {
+            self::assertInstanceOf(Comment::class, $oShape);
+            $oAuthor = $oShape->getAuthor();
+            self::assertInstanceOf(Comment\Author::class, $oAuthor);
+            $read[] = [$oShape->getText(), $oAuthor->getName(), $oAuthor->getInitials()];
+        }
+        self::assertSame([['First', 'Sam', 'S'], ['Second', 'Sam', 'S']], $read);
     }
 }
