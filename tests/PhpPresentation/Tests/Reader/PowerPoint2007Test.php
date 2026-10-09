@@ -44,6 +44,7 @@ use PhpOffice\PhpPresentation\Shape\Drawing\Base64;
 use PhpOffice\PhpPresentation\Shape\Drawing\Gd;
 use PhpOffice\PhpPresentation\Shape\Group;
 use PhpOffice\PhpPresentation\Shape\Line as LineShape;
+use PhpOffice\PhpPresentation\Shape\Media;
 use PhpOffice\PhpPresentation\Shape\Placeholder;
 use PhpOffice\PhpPresentation\Shape\RichText;
 use PhpOffice\PhpPresentation\Shape\RichText\Field;
@@ -57,6 +58,7 @@ use PhpOffice\PhpPresentation\Style\Color;
 use PhpOffice\PhpPresentation\Style\Fill;
 use PhpOffice\PhpPresentation\Style\Font;
 use PhpOffice\PhpPresentation\Style\Shadow;
+use PhpOffice\PhpPresentation\Writer\ODPresentation as ODPresentationWriter;
 use PhpOffice\PhpPresentation\Writer\PowerPoint2007 as PowerPoint2007Writer;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -2758,6 +2760,173 @@ class PowerPoint2007Test extends TestCase
             'WMF' => ['fish.wmf', 'wmf', 'image/x-wmf'],
             'EMF' => ['inkscape_shapes.emf', 'emf', 'image/x-emf'],
             'EMF+' => ['inkscape_shapes_emfplus.emf', 'emf', 'image/x-emf'],
+        ];
+    }
+
+    public function testMediaSurvivesTheRoundTrip(): void
+    {
+        $video = PHPPRESENTATION_TESTS_BASE_DIR . '/resources/videos/tiny.mp4';
+        // the smallest sound there is: the header of a WAV file and one sample of silence
+        $sound = sys_get_temp_dir() . '/' . uniqid('PhpPresentation') . '.wav';
+        file_put_contents($sound, 'RIFF' . pack('V', 37) . 'WAVEfmt ' . pack('VvvVVvv', 16, 1, 1, 8000, 8000, 1, 8) . 'data' . pack('V', 1) . "\x80");
+
+        $oPhpPresentation = new PhpPresentation();
+        $oSlide = $oPhpPresentation->getActiveSlide();
+        $oVideo = new Media();
+        $oVideo->setPath($video)->setName('Video')->setDescription('A blue square')
+            ->setOffsetX(10)->setOffsetY(20)->setWidth(320)->setHeight(240)->setRotation(90);
+        $oVideo->getBorder()->setLineWidth(2)->setLineStyle(Border::LINE_SINGLE);
+        $oVideo->getHyperlink()->setUrl('https://example.com/');
+        $oSlide->addShape($oVideo);
+        $oSound = new Media();
+        $oSound->setPath($sound)->setName('Sound')->setDecorative()->setWidth(64)->setHeight(64);
+        $oSlide->createGroup()->addShape($oSound);
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new PowerPoint2007Writer($oPhpPresentation))->save($file);
+        $oPhpPresentationRead = (new PowerPoint2007())->load($file);
+
+        $arrayShape = $oPhpPresentationRead->getActiveSlide()->getShapeCollection();
+        self::assertCount(2, $arrayShape);
+        $oShape = $arrayShape[0];
+        self::assertInstanceOf(Media::class, $oShape);
+        self::assertSame('Video', $oShape->getName());
+        self::assertSame('A blue square', $oShape->getDescription());
+        self::assertFalse($oShape->isDecorative());
+        self::assertSame([10, 20, 320, 240, 90], [$oShape->getOffsetX(), $oShape->getOffsetY(), $oShape->getWidth(), $oShape->getHeight(), $oShape->getRotation()]);
+        self::assertEquals(2, $oShape->getBorder()->getLineWidth());
+        self::assertSame('https://example.com/', $oShape->getHyperlink()->getUrl());
+        self::assertSame('mp4', $oShape->getExtension());
+        self::assertSame('video/mp4', $oShape->getMimeType());
+        self::assertStringEqualsFile($video, $oShape->getContents());
+        self::assertInstanceOf(Group::class, $arrayShape[1]);
+        $oShape = $arrayShape[1]->getShapeCollection()[0];
+        self::assertInstanceOf(Media::class, $oShape);
+        self::assertSame('Sound', $oShape->getName());
+        self::assertTrue($oShape->isDecorative());
+        self::assertSame('wav', $oShape->getExtension());
+        self::assertStringEqualsFile($sound, $oShape->getContents());
+
+        // what was read points into the file it was read from, and both Writers take the parts from there
+        $fileOut = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        $oZip = new ZipArchive();
+        foreach ([new PowerPoint2007Writer($oPhpPresentationRead), new ODPresentationWriter($oPhpPresentationRead)] as $oWriter) {
+            $oWriter->save($fileOut);
+            $oZip->open($fileOut);
+            $written = [];
+            for ($i = 0; $i < $oZip->numFiles; ++$i) {
+                $written[pathinfo((string) $oZip->getNameIndex($i), PATHINFO_EXTENSION)][] = $oZip->getFromIndex($i);
+            }
+            $oZip->close();
+            self::assertSame([file_get_contents($video)], $written['mp4'] ?? []);
+            self::assertSame([file_get_contents($sound)], $written['wav'] ?? []);
+        }
+
+        // and written over the file it was read from, it is still there to be read
+        (new PowerPoint2007Writer($oPhpPresentationRead))->save($file);
+        $oShape = (new PowerPoint2007())->load($file)->getActiveSlide()->getShapeCollection()[0];
+        self::assertInstanceOf(Media::class, $oShape);
+        self::assertStringEqualsFile($video, $oShape->getContents());
+
+        // with that file gone there is nothing to write, and the Writer says which file it misses
+        unlink($file);
+        unlink($sound);
+
+        try {
+            (new PowerPoint2007Writer($oPhpPresentationRead))->save($fileOut);
+            self::fail('The media of a file that is gone was written');
+        } catch (FileNotFoundException $e) {
+            self::assertStringContainsString(basename($file), $e->getMessage());
+        } finally {
+            unlink($fileOut);
+        }
+    }
+
+    public function testMediaWrittenByLibreOfficeIsRead(): void
+    {
+        // LibreOffice 26.8 inserted a video, a sound and a group holding a video and a text box
+        $file = (string) realpath(PHPPRESENTATION_TESTS_BASE_DIR . '/resources/files/PPTX_Media_LibreOffice.pptx');
+        $arrayShape = (new PowerPoint2007())->load($file)->getActiveSlide()->getShapeCollection();
+        self::assertCount(3, $arrayShape);
+        self::assertInstanceOf(Group::class, $arrayShape[2]);
+        $expected = [
+            [$arrayShape[0], 'A blue square', 'media1.mp4', [37, 75, 302, 226]],
+            [$arrayShape[1], 'Silence', 'media3.wav', [415, 75, 75, 75]],
+            [$arrayShape[2]->getShapeCollection()[0], 'In a group', 'media5.mp4', [415, 302, 151, 113]],
+        ];
+        foreach ($expected as [$oShape, $description, $part, $box]) {
+            self::assertInstanceOf(Media::class, $oShape);
+            self::assertSame($description, $oShape->getDescription());
+            self::assertSame('zip://' . $file . '#ppt/media/' . $part, $oShape->getPath());
+            self::assertSame($box, [$oShape->getOffsetX(), $oShape->getOffsetY(), $oShape->getWidth(), $oShape->getHeight()]);
+            // `ppaction://media` on the shape plays it, and is no link
+            self::assertFalse($oShape->hasHyperlink());
+            if ('wav' !== $oShape->getExtension()) {
+                self::assertStringEqualsFile(PHPPRESENTATION_TESTS_BASE_DIR . '/resources/videos/tiny.mp4', $oShape->getContents());
+            }
+        }
+    }
+
+    /**
+     * @dataProvider dataProviderMediaNotInThePackage
+     */
+    #[DataProvider('dataProviderMediaNotInThePackage')]
+    public function testMediaNotInThePackageIsReadAsItsPicture(callable $edit): void
+    {
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        copy(PHPPRESENTATION_TESTS_BASE_DIR . '/resources/files/PPTX_Media_LibreOffice.pptx', $file);
+        $oZip = new ZipArchive();
+        $oZip->open($file);
+        $edit($oZip);
+        $oZip->close();
+        $arrayShape = (new PowerPoint2007())->load($file)->getActiveSlide()->getShapeCollection();
+        unlink($file);
+
+        // the sound is the one LibreOffice shows a PNG for; the picture of its videos is a TIFF
+        self::assertCount(3, $arrayShape);
+        self::assertInstanceOf(Media::class, $arrayShape[0]);
+        self::assertInstanceOf(Gd::class, $arrayShape[1]);
+        self::assertSame('Silence', $arrayShape[1]->getDescription());
+    }
+
+    public function testMediaOfAFileWithAHashInItsNameIsReadAsItsPicture(): void
+    {
+        // `zip://file#part` is cut at its first `#`, so such a file cannot be pointed into
+        $file = sys_get_temp_dir() . '/' . uniqid('PhpPresentation#') . '.pptx';
+        copy(PHPPRESENTATION_TESTS_BASE_DIR . '/resources/files/PPTX_Media_LibreOffice.pptx', $file);
+        $oPhpPresentation = (new PowerPoint2007())->load($file);
+        $fileOut = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new PowerPoint2007Writer($oPhpPresentation))->save($fileOut);
+        unlink($file);
+        unlink($fileOut);
+
+        // the picture LibreOffice shows for a video is a TIFF, which is not read; the one of the sound is
+        $arrayShape = $oPhpPresentation->getActiveSlide()->getShapeCollection();
+        self::assertCount(2, $arrayShape);
+        self::assertInstanceOf(Gd::class, $arrayShape[0]);
+        self::assertSame('Silence', $arrayShape[0]->getDescription());
+    }
+
+    /**
+     * @return array<string, array<callable>>
+     */
+    public static function dataProviderMediaNotInThePackage(): array
+    {
+        $rels = 'ppt/slides/_rels/slide1.xml.rels';
+
+        return [
+            'the part is missing' => [function (ZipArchive $oZip): void {
+                $oZip->deleteName('ppt/media/media3.wav');
+            }],
+            'the relationship is missing' => [function (ZipArchive $oZip) use ($rels): void {
+                $oZip->addFromString($rels, (string) preg_replace('/<Relationship Id="rId[45]"[^>]*>/', '', (string) $oZip->getFromName($rels)));
+            }],
+            'the relationship is of another type' => [function (ZipArchive $oZip) use ($rels): void {
+                $oZip->addFromString($rels, (string) preg_replace('#(<Relationship Id="rId[45]" Type="[^"]*/)(audio|media)"#', '$1image"', (string) $oZip->getFromName($rels)));
+            }],
+            'the sound is a file beside the presentation' => [function (ZipArchive $oZip) use ($rels): void {
+                $oZip->addFromString($rels, str_replace('Target="../media/media3.wav"', 'Target="file:///C:/sound.wav" TargetMode="External"', (string) $oZip->getFromName($rels)));
+            }],
         ];
     }
 }
