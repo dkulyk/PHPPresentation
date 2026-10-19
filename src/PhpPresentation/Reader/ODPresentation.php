@@ -1396,6 +1396,20 @@ class ODPresentation implements ReaderInterface
         $this->loadShapeOffset($shape, $oNodeFrame);
         $shape->getPlotArea()->setType($chartType);
 
+        // A chart is a document of its own, and its styles say its language: the chart styles where
+        // this library writes them, the styles of the text of its titles where LibreOffice does, in
+        // the family the script of the language belongs to. A chart in the language of the document
+        // (whatever the case of the tag) is left to take it from the document
+        $language = null;
+        foreach ($xmlReader->getElements('/office:document-content/office:automatic-styles/style:style/style:text-properties') as $nodeTextProps) {
+            if ($nodeTextProps instanceof DOMElement && null !== ($language = $this->loadLanguage($nodeTextProps, Font::FORMAT_LATIN))) {
+                break;
+            }
+        }
+        if (null !== $language && 0 !== strcasecmp($language, $this->oPhpPresentation->getDocumentProperties()->getLanguage())) {
+            $shape->setLanguage($language);
+        }
+
         $graphicProps = $this->getChartStyle($xmlReader, $nodeChart, 'graphic');
         if ($graphicProps instanceof DOMElement && 'solid' === $graphicProps->getAttribute('draw:fill')) {
             $shape->getFill()->setFillType(Fill::FILL_SOLID)->setStartColor($this->loadChartColor($graphicProps, 'draw:fill-color'));
