@@ -756,12 +756,13 @@ class Content extends AbstractDecoratorWriter
                             $objWriter->startElement('text:a');
                             $objWriter->writeAttribute('xlink:type', 'simple');
                             $objWriter->writeAttribute('xlink:href', $this->getHyperlinkHref($richtext->getHyperlink()));
+                            // as it is: LibreOffice Impress reads the characters of a link, and none of its elements
                             $objWriter->text($richtext->getText());
                             $objWriter->endElement();
                         } elseif (null !== ($field = $this->getFieldElement($richtext, $fieldName))) {
                             $objWriter->writeElement($field, $richtext->getText());
                         } else {
-                            $objWriter->text($richtext->getText());
+                            $this->writeText($objWriter, $richtext->getText());
                         }
                         $objWriter->endElement();
                     } elseif ($richtext instanceof BreakElement) {
@@ -821,12 +822,13 @@ class Content extends AbstractDecoratorWriter
                             $objWriter->startElement('text:a');
                             $objWriter->writeAttribute('xlink:type', 'simple');
                             $objWriter->writeAttribute('xlink:href', $this->getHyperlinkHref($richtext->getHyperlink()));
+                            // as it is: LibreOffice Impress reads the characters of a link, and none of its elements
                             $objWriter->text($richtext->getText());
                             $objWriter->endElement();
                         } elseif (null !== ($field = $this->getFieldElement($richtext, $fieldName))) {
                             $objWriter->writeElement($field, $richtext->getText());
                         } else {
-                            $objWriter->text($richtext->getText());
+                            $this->writeText($objWriter, $richtext->getText());
                         }
                         $objWriter->endElement();
                     } elseif ($richtext instanceof BreakElement) {
@@ -943,6 +945,27 @@ class Content extends AbstractDecoratorWriter
         $objWriter->endElement();
     }
 
+    /**
+     * Write a text. A tab, a line feed, a leading space and every space after a space are written
+     * as elements: LibreOffice reads them, as characters, as one space or none.
+     */
+    protected function writeText(XMLWriter $objWriter, string $text): void
+    {
+        foreach (preg_split('/(\t|\r\n?|\n|^ +|(?<= ) +)/', $text, -1, PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY) ?: [] as $part) {
+            if ("\t" === $part) {
+                $objWriter->writeElement('text:tab');
+            } elseif ('' === trim($part, "\r\n")) {
+                $objWriter->writeElement('text:line-break');
+            } elseif ('' === trim($part, ' ')) {
+                $objWriter->startElement('text:s');
+                $objWriter->writeAttribute('text:c', (string) strlen($part));
+                $objWriter->endElement();
+            } else {
+                $objWriter->text($part);
+            }
+        }
+    }
+
     protected function writeShapeLine(XMLWriter $objWriter, Line $shape): void
     {
         // draw:line
@@ -978,11 +1001,13 @@ class Content extends AbstractDecoratorWriter
         $this->writeShapeDescription($objWriter, $shape);
         $this->writeShapeHyperlink($objWriter, $shape);
 
-        // text:p
-        $objWriter->startElement('text:p');
-        $objWriter->writeAttribute('text:style-name', $this->getAutomaticStyleName($this));
-        $objWriter->text($shape->getText());
-        $objWriter->endElement();
+        // text:p : a line is a paragraph, as LibreOffice writes it and as the Reader joins them
+        foreach (preg_split('/\r\n?|\n/', $shape->getText()) ?: [] as $line) {
+            $objWriter->startElement('text:p');
+            $objWriter->writeAttribute('text:style-name', $this->getAutomaticStyleName($this));
+            $this->writeText($objWriter, $line);
+            $objWriter->endElement();
+        }
 
         // draw:enhanced-geometry
         $objWriter->startElement('draw:enhanced-geometry');
@@ -1123,10 +1148,11 @@ class Content extends AbstractDecoratorWriter
                                         $objWriter->startElement('text:a');
                                         $objWriter->writeAttribute('xlink:type', 'simple');
                                         $objWriter->writeAttribute('xlink:href', $this->getHyperlinkHref($shapeRichText->getHyperlink()));
+                                        // as it is: LibreOffice Impress reads the characters of a link, and none of its elements
                                         $objWriter->text($shapeRichText->getText());
                                         $objWriter->endElement();
                                     } else {
-                                        $objWriter->text($shapeRichText->getText());
+                                        $this->writeText($objWriter, $shapeRichText->getText());
                                     }
                                     $objWriter->endElement();
                                 } elseif ($shapeRichText instanceof BreakElement) {

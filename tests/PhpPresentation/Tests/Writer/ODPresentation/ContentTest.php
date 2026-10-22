@@ -936,6 +936,24 @@ class ContentTest extends PhpPresentationTestCase
         $this->assertIsSchemaOpenDocumentValid('1.2');
     }
 
+    public function testAutoShapeWhitespace(): void
+    {
+        $oShape = new AutoShape();
+        $oShape->setType(AutoShape::TYPE_RECTANGLE)->setText("two  spaces\r\n lead\ttab");
+        $this->oPresentation->getActiveSlide()->addShape($oShape);
+
+        // LibreOffice reads a line feed as a space, so a line is a paragraph
+        $element = '/office:document-content/office:body/office:presentation/draw:page/draw:custom-shape/text:p';
+        $this->assertZipXmlElementCount('content.xml', $element, 2);
+        $this->assertZipXmlElementEquals('content.xml', $element . '[1]', 'two spaces');
+        $this->assertZipXmlAttributeEquals('content.xml', $element . '[1]/text:s', 'text:c', '1');
+        $this->assertZipXmlElementEquals('content.xml', $element . '[2]', 'leadtab');
+        $this->assertZipXmlAttributeEquals('content.xml', $element . '[2]/text:s', 'text:c', '1');
+        $this->assertZipXmlElementCount('content.xml', $element . '[2]/text:tab', 1);
+        $this->assertZipXmlAttributeEquals('content.xml', $element . '[2]', 'text:style-name', $this->getZipXmlAttributeValue('content.xml', $element . '[1]', 'text:style-name'));
+        $this->assertIsSchemaOpenDocumentValid('1.2');
+    }
+
     public function testAutoShapeOutlineOfNoFillIsNoStroke(): void
     {
         $oShape = new AutoShape();
@@ -1582,6 +1600,37 @@ class ContentTest extends PhpPresentationTestCase
 
         // LibreOffice would keep whitespace after the last run as a space in the paragraph's own font
         $this->assertZipXmlElementCount('content.xml', '/office:document-content/office:body/office:presentation/draw:page/draw:frame/draw:text-box/text:p/text()', 0);
+    }
+
+    public function testRichTextWhitespace(): void
+    {
+        $oRichText = $this->oPresentation->getActiveSlide()->createRichTextShape();
+        $oRichText->createTextRun("two   spaces\ttab\r\nline");
+        $oRichText->createTextRun(' lead');
+        $oRichText->createTextRun("link  as\tit is")->getHyperlink()->setUrl('https://example.org/');
+        $oRichText->createParagraph()->getBulletStyle()->setBulletType(Bullet::TYPE_BULLET);
+        $oRichText->createTextRun("item  one\ttab\nline");
+
+        // LibreOffice reads spaces in a row, a leading space, a tab and a line feed as one space or
+        // none unless they are elements
+        $element = '/office:document-content/office:body/office:presentation/draw:page/draw:frame/draw:text-box/text:p/text:span';
+        $this->assertZipXmlElementEquals('content.xml', $element . '[1]', 'two spacestabline');
+        $this->assertZipXmlElementCount('content.xml', $element . '[1]/text()', 4);
+        $this->assertZipXmlAttributeEquals('content.xml', $element . '[1]/text:s', 'text:c', '2');
+        $this->assertZipXmlElementCount('content.xml', $element . '[1]/text:tab', 1);
+        $this->assertZipXmlElementCount('content.xml', $element . '[1]/text:line-break', 1);
+        $this->assertZipXmlElementEquals('content.xml', $element . '[2]', 'lead');
+        $this->assertZipXmlAttributeEquals('content.xml', $element . '[2]/text:s', 'text:c', '1');
+        // but it reads the characters of a link, and none of its elements
+        $this->assertZipXmlElementEquals('content.xml', $element . '[3]/text:a', "link  as\tit is");
+        $this->assertZipXmlElementCount('content.xml', $element . '[3]/text:a/*', 0);
+
+        $element = '/office:document-content/office:body/office:presentation/draw:page/draw:frame/draw:text-box/text:list/text:list-item/text:p/text:span';
+        $this->assertZipXmlElementEquals('content.xml', $element, 'item onetabline');
+        $this->assertZipXmlAttributeEquals('content.xml', $element . '/text:s', 'text:c', '1');
+        $this->assertZipXmlElementCount('content.xml', $element . '/text:tab', 1);
+        $this->assertZipXmlElementCount('content.xml', $element . '/text:line-break', 1);
+        $this->assertIsSchemaOpenDocumentValid('1.2');
     }
 
     public function testRichTextRotation(): void
@@ -2370,6 +2419,19 @@ class ContentTest extends PhpPresentationTestCase
         $this->assertZipXmlElementExists('content.xml', $element);
         $this->assertZipXmlAttributeEquals('content.xml', $element, 'xlink:href', 'https://github.com/PHPOffice/PHPPresentation/');
 
+        $this->assertIsSchemaOpenDocumentValid('1.2');
+    }
+
+    public function testTableWithWhitespace(): void
+    {
+        $oCell = $this->oPresentation->getActiveSlide()->createTableShape()->createRow()->getCell();
+        $oCell->createTextRun("two  spaces\ttab\nline");
+
+        $element = '/office:document-content/office:body/office:presentation/draw:page/draw:frame/table:table/table:table-row/table:table-cell/text:p/text:span';
+        $this->assertZipXmlElementEquals('content.xml', $element, 'two spacestabline');
+        $this->assertZipXmlAttributeEquals('content.xml', $element . '/text:s', 'text:c', '1');
+        $this->assertZipXmlElementCount('content.xml', $element . '/text:tab', 1);
+        $this->assertZipXmlElementCount('content.xml', $element . '/text:line-break', 1);
         $this->assertIsSchemaOpenDocumentValid('1.2');
     }
 
