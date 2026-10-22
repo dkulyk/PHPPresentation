@@ -190,7 +190,7 @@ model, with the exceptions its notes list.
 |  | Series: labels, colours, markers | :material-close: | :material-alert-outline:<sup>62</sup> | :material-close: | :material-alert-outline:<sup>63</sup> | :material-check: |
 |  | Chart language |  | :material-close: | :material-close: | :material-check: | :material-check: |
 
-1. Category, company, revision, status not read; dates only with zone, no fraction.
+1. Category, company, revision, status not read.
 2. Company (app.xml) not read.
 3. Browse type only; loop not read.
 4. Last view, comment visibility not read.
