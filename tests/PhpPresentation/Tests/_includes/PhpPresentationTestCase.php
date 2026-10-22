@@ -111,7 +111,8 @@ class PhpPresentationTestCase extends TestCase
         if (\PHP_VERSION_ID < 80000) {
             $this->xmlDisableEntityLoader = libxml_disable_entity_loader(false);
         }
-        $this->workDirectory = sys_get_temp_dir() . '/PhpPresentation_Unit_Test/';
+        // One directory per process, so that two runs at once do not unpack into each other
+        $this->workDirectory = sys_get_temp_dir() . '/PhpPresentation_Unit_Test_' . getmypid() . '/';
         $this->oPresentation = new PhpPresentation();
         $this->filePath = tempnam(sys_get_temp_dir(), 'PhpPresentation');
 
@@ -134,6 +135,7 @@ class PhpPresentationTestCase extends TestCase
         libxml_use_internal_errors($this->xmlInternalErrors);
         $this->oPresentation = null;
         $this->resetPresentationFile();
+        rmdir($this->workDirectory);
     }
 
     /**
