@@ -1330,6 +1330,139 @@ class ODPresentationTest extends TestCase
         self::assertSame($italic, $oFont->isItalic());
     }
 
+    /**
+     * @return array<string, array{string, float}>
+     */
+    public static function dataProviderLengthUnit(): array
+    {
+        return [
+            'millimetres' => ['mm', 10],
+            'inches' => ['in', 1 / 2.54],
+            'points' => ['pt', 72 / 2.54],
+            'picas' => ['pc', 6 / 2.54],
+            'pixels' => ['px', 96 / 2.54],
+        ];
+    }
+
+    /**
+     * A length can be written in any of six units, and the Writer and LibreOffice only use two.
+     *
+     * @dataProvider dataProviderLengthUnit
+     */
+    #[DataProvider('dataProviderLengthUnit')]
+    public function testLengthUnit(string $unit, float $perCentimeter): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oShape = $oPhpPresentation->getActiveSlide()->createRichTextShape();
+        $oShape->setOffsetX(-48)->setOffsetY(96)->setWidth(480)->setHeight(240)->setInsetLeft(24);
+        $oShape->getBorder()->setLineStyle(Border::LINE_SINGLE)->setLineWidth(3);
+        $oShape->getActiveParagraph()
+            ->setLineSpacingMode(Paragraph::LINE_SPACING_MODE_POINT)
+            ->setLineSpacing(20)
+            ->setSpacingBefore(12);
+        $oShape->createTextRun('Sample')->getFont()->setSize(24);
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new ODPresentationWriter($oPhpPresentation))->save($file);
+
+        // every length the Writer wrote, in centimetres or in points, said in the unit asked for
+        $oZip = new ZipArchive();
+        $oZip->open($file);
+        $content = (string) preg_replace_callback('/"(-?[\d.]+)(cm|pt)"/', function (array $matches) use ($unit, $perCentimeter): string {
+            $centimeters = (float) $matches[1] * ('pt' === $matches[2] ? 2.54 / 72 : 1);
+
+            return '"' . number_format($centimeters * $perCentimeter, 6, '.', '') . $unit . '"';
+        }, (string) $oZip->getFromName('content.xml'), -1, $count);
+        $oZip->addFromString('content.xml', $content);
+        $oZip->close();
+        self::assertGreaterThan(8, $count);
+
+        $oPhpPresentationRead = (new ODPresentation())->load($file);
+        unlink($file);
+
+        $arrayShape = array_values((array) $oPhpPresentationRead->getActiveSlide()->getShapeCollection());
+        self::assertInstanceOf(RichText::class, $arrayShape[0]);
+        self::assertEquals(-48, $arrayShape[0]->getOffsetX());
+        self::assertEquals(96, $arrayShape[0]->getOffsetY());
+        self::assertEquals(480, $arrayShape[0]->getWidth());
+        self::assertEquals(240, $arrayShape[0]->getHeight());
+        self::assertEqualsWithDelta(24, $arrayShape[0]->getInsetLeft(), 0.001);
+        self::assertEqualsWithDelta(3, $arrayShape[0]->getBorder()->getLineWidth(), 0.001);
+        $oParagraph = $arrayShape[0]->getParagraph();
+        self::assertEquals(Paragraph::LINE_SPACING_MODE_POINT, $oParagraph->getLineSpacingMode());
+        self::assertEquals(20, $oParagraph->getLineSpacing());
+        self::assertEqualsWithDelta(12, $oParagraph->getSpacingBefore(), 0.001);
+        $oFont = $oParagraph->getRichTextElements()[0]->getFont();
+        self::assertInstanceOf(Font::class, $oFont);
+        self::assertEquals(24, $oFont->getSize());
+    }
+
+    /**
+     * The width of a border and the translation of a rotated shape are lengths inside a longer value.
+     */
+    public function testLengthUnitInsideAValue(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oSlide = $oPhpPresentation->getActiveSlide();
+        $oSlide->createRichTextShape()->setOffsetX(100)->setOffsetY(50)->setWidth(300)->setHeight(100)->setRotation(45);
+        $oSlide->createTableShape(1)->createRow()->getCell(0)->getBorders()->getTop()
+            ->setLineStyle(Border::LINE_SINGLE)
+            ->setLineWidth(4);
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new ODPresentationWriter($oPhpPresentation))->save($file);
+
+        $oZip = new ZipArchive();
+        $oZip->open($file);
+        $content = str_replace(
+            ['translate (4.744cm -1.096cm)', 'fo:border-top="2.29pt '],
+            ['translate (1.867717in -0.431496in)', 'fo:border-top="0.807861mm '],
+            (string) $oZip->getFromName('content.xml'),
+            $count
+        );
+        $oZip->addFromString('content.xml', $content);
+        $oZip->close();
+        self::assertEquals(2, $count);
+
+        $oPhpPresentationRead = (new ODPresentation())->load($file);
+        unlink($file);
+
+        $arrayShape = array_values((array) $oPhpPresentationRead->getActiveSlide()->getShapeCollection());
+        self::assertInstanceOf(RichText::class, $arrayShape[0]);
+        self::assertEquals(100, $arrayShape[0]->getOffsetX());
+        self::assertEquals(50, $arrayShape[0]->getOffsetY());
+        self::assertEquals(45, $arrayShape[0]->getRotation());
+        self::assertInstanceOf(Table::class, $arrayShape[1]);
+        self::assertEqualsWithDelta(4, $arrayShape[1]->getRow(0)->getCell(0)->getBorders()->getTop()->getLineWidth(), 0.01);
+    }
+
+    /**
+     * A font size can be a percentage of the size it inherits, which is no size to read.
+     */
+    public function testFontSizeInPercent(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oPhpPresentation->getActiveSlide()->createRichTextShape()->createTextRun('Sample');
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new ODPresentationWriter($oPhpPresentation))->save($file);
+
+        $oZip = new ZipArchive();
+        $oZip->open($file);
+        $oZip->addFromString('content.xml', str_replace('fo:font-size="10pt"', 'fo:font-size="150%"', (string) $oZip->getFromName('content.xml'), $count));
+        $oZip->close();
+        self::assertGreaterThan(0, $count);
+
+        $oPhpPresentationRead = (new ODPresentation())->load($file);
+        unlink($file);
+
+        $arrayShape = array_values((array) $oPhpPresentationRead->getActiveSlide()->getShapeCollection());
+        self::assertInstanceOf(RichText::class, $arrayShape[0]);
+        $oFont = $arrayShape[0]->getParagraph()->getRichTextElements()[0]->getFont();
+        self::assertInstanceOf(Font::class, $oFont);
+        self::assertEquals(10, $oFont->getSize());
+    }
+
     public function testFontStateSurvivesTheRoundTrip(): void
     {
         $oPhpPresentation = new PhpPresentation();
