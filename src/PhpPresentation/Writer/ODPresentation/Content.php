@@ -89,6 +89,58 @@ class Content extends AbstractDecoratorWriter
     ];
 
     /**
+     * What `text:file-name` shows for each kind of file field.
+     */
+    private const FIELD_FILE_DISPLAY = [
+        'file' => 'full',
+        'file1' => 'path',
+        'file2' => 'name',
+        'file3' => 'name-and-extension',
+    ];
+
+    /**
+     * The data styles each dated format is written with: the one of its date or of its time,
+     * and for the two formats that say both, the one of the time written beside the date.
+     *
+     * These are the styles LibreOffice gives each format when it reads it from OOXML. Impress has
+     * eight date styles and seven time styles, so a format it has no style for wears the nearest.
+     * `datetime11` is the exception: LibreOffice gives it `T1`, which it writes with an attribute
+     * the schema has no place for on a time style, and `T3` is the 24-hour format it stands for.
+     */
+    private const FIELD_DATA_STYLES = [
+        Field::TYPE_DATETIME => ['D1'],
+        'datetime1' => ['D4'],
+        'datetime2' => ['D2'],
+        'datetime3' => ['D6'],
+        'datetime4' => ['D6'],
+        'datetime5' => ['D5'],
+        'datetime6' => ['D6'],
+        'datetime7' => ['D5'],
+        'datetime8' => ['D4', 'T5'],
+        'datetime9' => ['D4', 'T6'],
+        'datetime10' => ['T2'],
+        'datetime11' => ['T3'],
+        'datetime12' => ['T5'],
+        'datetime13' => ['T6'],
+    ];
+
+    /**
+     * The data styles above, as LibreOffice writes them and under the names it gives them. It
+     * tells them apart by what is in them, down to the text between the parts.
+     */
+    private const DATA_STYLES = [
+        'D1' => '<number:date-style style:name="D1" number:automatic-order="true"><number:day number:style="long"/><number:text>.</number:text><number:month number:style="long"/><number:text>.</number:text><number:year number:style="long"/></number:date-style>',
+        'D2' => '<number:date-style style:name="D2" number:automatic-order="true"><number:day-of-week number:style="long"/><number:text>, </number:text><number:day/><number:text>. </number:text><number:month number:style="long" number:textual="true"/><number:text> </number:text><number:year number:style="long"/></number:date-style>',
+        'D4' => '<number:date-style style:name="D4"><number:day number:style="long"/><number:text>.</number:text><number:month number:style="long"/><number:text>.</number:text><number:year number:style="long"/></number:date-style>',
+        'D5' => '<number:date-style style:name="D5"><number:day/><number:text>. </number:text><number:month number:textual="true"/><number:text> </number:text><number:year number:style="long"/></number:date-style>',
+        'D6' => '<number:date-style style:name="D6"><number:day/><number:text>. </number:text><number:month number:style="long" number:textual="true"/><number:text> </number:text><number:year number:style="long"/></number:date-style>',
+        'T2' => '<number:time-style style:name="T2"><number:hours/><number:text>:</number:text><number:minutes/></number:time-style>',
+        'T3' => '<number:time-style style:name="T3"><number:hours/><number:text>:</number:text><number:minutes/><number:text>:</number:text><number:seconds/></number:time-style>',
+        'T5' => '<number:time-style style:name="T5"><number:hours/><number:text>:</number:text><number:minutes/><number:am-pm/></number:time-style>',
+        'T6' => '<number:time-style style:name="T6"><number:hours/><number:text>:</number:text><number:minutes/><number:text>:</number:text><number:seconds/><number:am-pm/></number:time-style>',
+    ];
+
+    /**
      * The `presentation:class` of each kind of placeholder a text shape can hold. OpenDocument
      * spells three of them differently, and has no class for the others, which are then written as
      * an ordinary frame.
@@ -150,6 +202,13 @@ class Content extends AbstractDecoratorWriter
      * @var array<string, int>
      */
     protected $automaticStyleCounters = [];
+
+    /**
+     * The data styles the fields of the presentation are written with, by name.
+     *
+     * @var array<string, true>
+     */
+    protected $dataStyles = [];
 
     /**
      * Used to track the current shape ID.
@@ -237,6 +296,11 @@ class Content extends AbstractDecoratorWriter
             }
 
             ++$incSlide;
+        }
+        // The data styles come first, as LibreOffice writes them: their family shares its names
+        // with the text styles, and a reader that keeps the two in one list keeps the text style
+        foreach (array_keys($this->dataStyles) as $styleName) {
+            $objWriter->writeRaw(self::DATA_STYLES[$styleName]);
         }
         // Emitted from the pool, in the order the styles were first needed -- which is the order
         // `office:automatic-styles` wants, since it precedes the content that references it.
@@ -759,7 +823,7 @@ class Content extends AbstractDecoratorWriter
                             $objWriter->text($richtext->getText());
                             $objWriter->endElement();
                         } elseif (null !== ($field = $this->getFieldElement($richtext, $fieldName))) {
-                            $objWriter->writeElement($field, $richtext->getText());
+                            $this->writeField($objWriter, $richtext, $field);
                         } else {
                             $objWriter->text($richtext->getText());
                         }
@@ -824,7 +888,7 @@ class Content extends AbstractDecoratorWriter
                             $objWriter->text($richtext->getText());
                             $objWriter->endElement();
                         } elseif (null !== ($field = $this->getFieldElement($richtext, $fieldName))) {
-                            $objWriter->writeElement($field, $richtext->getText());
+                            $this->writeField($objWriter, $richtext, $field);
                         } else {
                             $objWriter->text($richtext->getText());
                         }
@@ -887,6 +951,29 @@ class Content extends AbstractDecoratorWriter
         }
 
         return self::FIELD_ODF[$type] ?? null;
+    }
+
+    /**
+     * Write a field with the text it stands in for, and with which of its formats it is: the data
+     * style of a date or a time, and what a file name shows.
+     */
+    protected function writeField(XMLWriter $objWriter, TextElement $richtext, string $field): void
+    {
+        $type = $richtext instanceof Field ? $richtext->getType() : '';
+        $dataStyles = self::FIELD_DATA_STYLES[$type] ?? [];
+
+        $objWriter->startElement($field);
+        $objWriter->writeAttributeIf(isset($dataStyles[0]), 'style:data-style-name', $dataStyles[0] ?? '');
+        $objWriter->writeAttributeIf(isset(self::FIELD_FILE_DISPLAY[$type]), 'text:display', self::FIELD_FILE_DISPLAY[$type] ?? '');
+        $objWriter->text($richtext->getText());
+        $objWriter->endElement();
+        if (isset($dataStyles[1])) {
+            // OpenDocument has no field for a date and a time together, so LibreOffice writes two
+            $objWriter->text(' ');
+            $objWriter->startElement('text:time');
+            $objWriter->writeAttribute('style:data-style-name', $dataStyles[1]);
+            $objWriter->endElement();
+        }
     }
 
     /**
@@ -1631,6 +1718,10 @@ class Content extends AbstractDecoratorWriter
                 if ($richtext instanceof Run) {
                     // Style des font text
                     $this->addTextStyle($richtext);
+                }
+                if ($richtext instanceof Field && !($richtext->hasHyperlink() && '' != $richtext->getHyperlink()->getUrl())) {
+                    // a field with a link is written as the link
+                    $this->dataStyles += array_fill_keys(self::FIELD_DATA_STYLES[$richtext->getType()] ?? [], true);
                 }
             }
         }

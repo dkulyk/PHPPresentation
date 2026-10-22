@@ -327,9 +327,20 @@ The PowerPoint2007 writer writes every kind, as the `a:fld` it is.
 
 OpenDocument names a field by what it is rather than by how it is formatted, so the ODPresentation
 writer maps the kinds onto the elements it has -- `text:page-number`, `text:page-count`,
-`text:date`, `text:time`, `text:author-name`, `text:file-name` -- and all fourteen dated formats
-come down to a date or a time. `slidename` has no element in OpenDocument 1.2, so it is written as
-the text it stands in for, and so is any other kind. The date format itself would travel as a data
-style, which this writer does not write.
+`text:date`, `text:time`, `text:author-name`, `text:file-name`. `slidename` has no element in
+OpenDocument 1.2, so it is written as the text it stands in for, and so is any other kind.
+
+Which of the dated formats a field is travels as a data style, a `number:date-style` or a
+`number:time-style`, and which of the file formats as `text:display`. The data styles are the
+ones LibreOffice Impress has, eight for a date and seven for a time, and the reader reads them
+back. Impress has none for three of the formats, which wear the nearest one, and none for a date
+and a time together, which are written as the two fields they are in LibreOffice:
+
+| Kind | Written as | Read back as |
+|---|---|---|
+| `datetime4`, `datetime6` | the style of `datetime3` | `datetime3` |
+| `datetime7` | the style of `datetime5` | `datetime5` |
+| `datetime8` | a `text:date` and a `text:time` in one span | `datetime8` |
+| `datetime9` | a `text:date` and a `text:time` in one span | `datetime9` |
 
 The PowerPoint97 writer writes what the field stands in for, as the text it is.
