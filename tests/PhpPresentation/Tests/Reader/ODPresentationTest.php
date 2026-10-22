@@ -31,6 +31,7 @@ use PhpOffice\PhpPresentation\Shape\Drawing\Base64;
 use PhpOffice\PhpPresentation\Shape\Drawing\Gd;
 use PhpOffice\PhpPresentation\Shape\Group;
 use PhpOffice\PhpPresentation\Shape\Line;
+use PhpOffice\PhpPresentation\Shape\Media;
 use PhpOffice\PhpPresentation\Shape\Placeholder;
 use PhpOffice\PhpPresentation\Shape\RichText;
 use PhpOffice\PhpPresentation\Shape\RichText\Field;
@@ -47,6 +48,7 @@ use PhpOffice\PhpPresentation\Style\Font;
 use PhpOffice\PhpPresentation\Style\Outline;
 use PhpOffice\PhpPresentation\Style\Shadow;
 use PhpOffice\PhpPresentation\Writer\ODPresentation as ODPresentationWriter;
+use PhpOffice\PhpPresentation\Writer\PowerPoint2007 as PowerPoint2007Writer;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ZipArchive;
@@ -2786,6 +2788,180 @@ class ODPresentationTest extends TestCase
             'WMF' => ['fish.wmf', 'wmf', 'image/x-wmf'],
             'EMF' => ['inkscape_shapes.emf', 'emf', 'image/x-emf'],
             'EMF+' => ['inkscape_shapes_emfplus.emf', 'emf', 'image/x-emf'],
+        ];
+    }
+
+    public function testMediaSurvivesTheRoundTrip(): void
+    {
+        $video = PHPPRESENTATION_TESTS_BASE_DIR . '/resources/videos/tiny.mp4';
+        // the smallest sound there is: the header of a WAV file and one sample of silence
+        $sound = sys_get_temp_dir() . '/' . uniqid('PhpPresentation') . '.wav';
+        file_put_contents($sound, 'RIFF' . pack('V', 37) . 'WAVEfmt ' . pack('VvvVVvv', 16, 1, 1, 8000, 8000, 1, 8) . 'data' . pack('V', 1) . "\x80");
+
+        $oPhpPresentation = new PhpPresentation();
+        $oSlide = $oPhpPresentation->getActiveSlide();
+        $oVideo = new Media();
+        $oVideo->setPath($video)->setName('Video')->setDescription('A blue square')
+            ->setOffsetX(10)->setOffsetY(20)->setWidth(320)->setHeight(240);
+        $oSlide->addShape($oVideo);
+        $oSound = new Media();
+        $oSound->setPath($sound)->setName('Sound')->setDecorative()->setWidth(64)->setHeight(64);
+        $oSlide->createGroup()->addShape($oSound);
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new ODPresentationWriter($oPhpPresentation))->save($file);
+        $oPhpPresentationRead = (new ODPresentation())->load($file);
+
+        $arrayShape = $oPhpPresentationRead->getActiveSlide()->getShapeCollection();
+        self::assertCount(2, $arrayShape);
+        $oShape = $arrayShape[0];
+        self::assertInstanceOf(Media::class, $oShape);
+        self::assertSame('Video', $oShape->getName());
+        self::assertSame('A blue square', $oShape->getDescription());
+        self::assertFalse($oShape->isDecorative());
+        self::assertSame([10, 20, 320, 240], [$oShape->getOffsetX(), $oShape->getOffsetY(), $oShape->getWidth(), $oShape->getHeight()]);
+        self::assertSame('mp4', $oShape->getExtension());
+        self::assertSame('video/mp4', $oShape->getMimeType());
+        self::assertStringEqualsFile($video, $oShape->getContents());
+        // a video or a sound in a group is written as one, and not as a picture
+        self::assertInstanceOf(Group::class, $arrayShape[1]);
+        $oShape = $arrayShape[1]->getShapeCollection()[0];
+        self::assertInstanceOf(Media::class, $oShape);
+        self::assertSame('Sound', $oShape->getName());
+        self::assertTrue($oShape->isDecorative());
+        self::assertSame('wav', $oShape->getExtension());
+        self::assertStringEqualsFile($sound, $oShape->getContents());
+
+        // what was read points into the file it was read from, and both Writers take the parts from there
+        $fileOut = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        $oZip = new ZipArchive();
+        foreach ([new ODPresentationWriter($oPhpPresentationRead), new PowerPoint2007Writer($oPhpPresentationRead)] as $oWriter) {
+            $oWriter->save($fileOut);
+            $oZip->open($fileOut);
+            $written = [];
+            for ($i = 0; $i < $oZip->numFiles; ++$i) {
+                $written[pathinfo((string) $oZip->getNameIndex($i), PATHINFO_EXTENSION)][] = $oZip->getFromIndex($i);
+            }
+            $oZip->close();
+            self::assertSame([file_get_contents($video)], $written['mp4'] ?? []);
+            self::assertSame([file_get_contents($sound)], $written['wav'] ?? []);
+        }
+
+        // and written over the file it was read from, it is still there to be read
+        (new ODPresentationWriter($oPhpPresentationRead))->save($file);
+        $oShape = (new ODPresentation())->load($file)->getActiveSlide()->getShapeCollection()[0];
+        self::assertInstanceOf(Media::class, $oShape);
+        self::assertStringEqualsFile($video, $oShape->getContents());
+
+        // with that file gone there is nothing to write, and the Writer says which file it misses
+        unlink($file);
+        unlink($sound);
+
+        try {
+            (new ODPresentationWriter($oPhpPresentationRead))->save($fileOut);
+            self::fail('The media of a file that is gone was written');
+        } catch (FileNotFoundException $e) {
+            self::assertStringContainsString(basename($file), $e->getMessage());
+        } finally {
+            file_exists($fileOut) && unlink($fileOut);
+        }
+    }
+
+    public function testMediaWrittenByLibreOfficeIsRead(): void
+    {
+        // LibreOffice 26.8 inserted a video, a sound and a group holding a video and a text box,
+        // and keeps what it inserts under `Media/`
+        $file = (string) realpath(PHPPRESENTATION_TESTS_BASE_DIR . '/resources/files/ODP_Media_LibreOffice.odp');
+        $arrayShape = (new ODPresentation())->load($file)->getActiveSlide()->getShapeCollection();
+        self::assertCount(3, $arrayShape);
+        self::assertInstanceOf(Group::class, $arrayShape[2]);
+        $expected = [
+            [$arrayShape[0], 'Video', 'A blue square', 'tiny.mp4', [38, 76, 302, 227]],
+            [$arrayShape[1], 'Sound', 'Silence', 'tiny.wav', [416, 76, 76, 76]],
+            [$arrayShape[2]->getShapeCollection()[0], 'Grouped video', 'In a group', 'tiny.mp4', [416, 302, 151, 113]],
+        ];
+        foreach ($expected as [$oShape, $name, $description, $part, $box]) {
+            self::assertInstanceOf(Media::class, $oShape);
+            self::assertSame($name, $oShape->getName());
+            self::assertSame($description, $oShape->getDescription());
+            self::assertSame('zip://' . $file . '#Media/' . $part, $oShape->getPath());
+            self::assertSame($box, [$oShape->getOffsetX(), $oShape->getOffsetY(), $oShape->getWidth(), $oShape->getHeight()]);
+            if ('mp4' === $oShape->getExtension()) {
+                self::assertStringEqualsFile(PHPPRESENTATION_TESTS_BASE_DIR . '/resources/videos/tiny.mp4', $oShape->getContents());
+            }
+        }
+    }
+
+    /**
+     * @dataProvider dataProviderMediaNotInThePackage
+     */
+    #[DataProvider('dataProviderMediaNotInThePackage')]
+    public function testMediaNotInThePackageIsNotRead(string $href, bool $read): void
+    {
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        copy(PHPPRESENTATION_TESTS_BASE_DIR . '/resources/files/ODP_Media_LibreOffice.odp', $file);
+        $oZip = new ZipArchive();
+        $oZip->open($file);
+        $oZip->addFromString('content.xml', str_replace('xlink:href="Media/tiny.wav"', 'xlink:href="' . $href . '"', (string) $oZip->getFromName('content.xml')));
+        $oZip->close();
+        $arrayShape = (new ODPresentation())->load($file)->getActiveSlide()->getShapeCollection();
+        unlink($file);
+
+        self::assertCount($read ? 3 : 2, $arrayShape);
+        self::assertInstanceOf(Media::class, $arrayShape[0]);
+        self::assertInstanceOf($read ? Media::class : Group::class, $arrayShape[1]);
+    }
+
+    public function testMediaComesBeforeThePictureShownForIt(): void
+    {
+        // LibreOffice writes the picture a video or a sound is shown as after its `draw:plugin`
+        $image = '<draw:image xlink:href="Thumbnails/thumbnail.png" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>';
+        foreach (['Media/tiny.wav' => Media::class, '../tiny.wav' => Gd::class] as $href => $class) {
+            $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+            copy(PHPPRESENTATION_TESTS_BASE_DIR . '/resources/files/ODP_Media_LibreOffice.odp', $file);
+            $oZip = new ZipArchive();
+            $oZip->open($file);
+            $content = preg_replace('#xlink:href="Media/tiny\.wav"([^>]*>.*?</draw:plugin>)#', 'xlink:href="' . $href . '"$1' . $image, (string) $oZip->getFromName('content.xml'), 1, $count);
+            self::assertSame(1, $count);
+            $oZip->addFromString('content.xml', (string) $content);
+            $oZip->close();
+            $arrayShape = (new ODPresentation())->load($file)->getActiveSlide()->getShapeCollection();
+            unlink($file);
+
+            self::assertCount(3, $arrayShape);
+            self::assertInstanceOf($class, $arrayShape[1]);
+            self::assertSame('Sound', $arrayShape[1]->getName());
+        }
+    }
+
+    public function testMediaOfAFileWithAHashInItsNameIsNotRead(): void
+    {
+        // `zip://file#part` is cut at its first `#`, so such a file cannot be pointed into
+        $file = sys_get_temp_dir() . '/' . uniqid('PhpPresentation#') . '.odp';
+        copy(PHPPRESENTATION_TESTS_BASE_DIR . '/resources/files/ODP_Media_LibreOffice.odp', $file);
+        $oPhpPresentation = (new ODPresentation())->load($file);
+        $fileOut = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new ODPresentationWriter($oPhpPresentation))->save($fileOut);
+        unlink($file);
+        unlink($fileOut);
+
+        $arrayShape = $oPhpPresentation->getActiveSlide()->getShapeCollection();
+        self::assertCount(1, $arrayShape);
+        self::assertInstanceOf(Group::class, $arrayShape[0]);
+    }
+
+    /**
+     * @return array<string, array{string, bool}>
+     */
+    public static function dataProviderMediaNotInThePackage(): array
+    {
+        return [
+            'a path from the root of the package' => ['./Media/tiny.wav', true],
+            'a file of the package that is missing' => ['Media/missing.wav', false],
+            // which is how LibreOffice writes a sound it links to
+            'a file beside the presentation' => ['../tiny.wav', false],
+            'an address' => ['https://example.com/tiny.wav', false],
+            'nothing' => ['', false],
         ];
     }
 }
