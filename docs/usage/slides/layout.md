@@ -57,7 +57,8 @@ In an OpenDocument presentation, a text shape that is a title, a centered title,
 body, a footer, a date or a slide number is written as a presentation object of that class, which
 is what makes LibreOffice export a title as a heading in a tagged PDF. It keeps its own position,
 size and style rather than take the ones of the layout. The other kinds of placeholder have no
-class to go by and are written as a plain text box.
+class to go by and are written as a plain text box. OpenDocument has one class for both titles, so
+a centered title (`Placeholder::PH_TYPE_CTRTITLE`) is read back as `Placeholder::PH_TYPE_TITLE`.
 
 ### Fields
 
