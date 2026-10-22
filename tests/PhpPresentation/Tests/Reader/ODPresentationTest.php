@@ -27,6 +27,7 @@ use PhpOffice\PhpPresentation\PresentationProperties;
 use PhpOffice\PhpPresentation\Reader\ODPresentation;
 use PhpOffice\PhpPresentation\Shape\AutoShape;
 use PhpOffice\PhpPresentation\Shape\Chart;
+use PhpOffice\PhpPresentation\Shape\Comment;
 use PhpOffice\PhpPresentation\Shape\Drawing\Base64;
 use PhpOffice\PhpPresentation\Shape\Drawing\Gd;
 use PhpOffice\PhpPresentation\Shape\Group;
@@ -2786,6 +2787,122 @@ class ODPresentationTest extends TestCase
             'WMF' => ['fish.wmf', 'wmf', 'image/x-wmf'],
             'EMF' => ['inkscape_shapes.emf', 'emf', 'image/x-emf'],
             'EMF+' => ['inkscape_shapes_emfplus.emf', 'emf', 'image/x-emf'],
+        ];
+    }
+
+    public function testCommentSurvivesTheRoundTrip(): void
+    {
+        $oAuthor = (new Comment\Author())->setName('Jane Doe')->setInitials('JD');
+        $oPhpPresentation = new PhpPresentation();
+        $oSlide = $oPhpPresentation->getActiveSlide();
+        $oSlide->createRichTextShape()->createTextRun('Text');
+        $oSlide->addShape((new Comment())->setText("First line\nДруге вухо")->setOffsetX(100)->setOffsetY(60)->setDate(1700000000)->setAuthor($oAuthor));
+        $oSlide->addShape((new Comment())->setText('No author')->setDate(1700003600));
+        $oPhpPresentation->createSlide()->addShape((new Comment())->setText('Other slide')->setAuthor($oAuthor));
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new ODPresentationWriter($oPhpPresentation))->save($file);
+        $oPhpPresentationRead = (new ODPresentation())->load($file);
+        unlink($file);
+
+        // A comment was written and not read
+        $arrayShape = array_values((array) $oPhpPresentationRead->getSlide(0)->getShapeCollection());
+        self::assertCount(3, $arrayShape);
+        self::assertInstanceOf(Comment::class, $arrayShape[1]);
+        self::assertEquals("First line\nДруге вухо", $arrayShape[1]->getText());
+        self::assertEquals(100, $arrayShape[1]->getOffsetX());
+        self::assertEquals(60, $arrayShape[1]->getOffsetY());
+        self::assertEquals(1700000000, $arrayShape[1]->getDate());
+        self::assertInstanceOf(Comment\Author::class, $arrayShape[1]->getAuthor());
+        self::assertEquals('Jane Doe', $arrayShape[1]->getAuthor()->getName());
+        self::assertEquals('JD', $arrayShape[1]->getAuthor()->getInitials());
+        $oAuthorRead = $arrayShape[1]->getAuthor();
+        self::assertInstanceOf(Comment::class, $arrayShape[2]);
+        self::assertEquals('No author', $arrayShape[2]->getText());
+        self::assertEquals(1700003600, $arrayShape[2]->getDate());
+        self::assertNull($arrayShape[2]->getAuthor());
+
+        // The comments of one author share it, as they did before the file was written
+        $arrayShape = array_values((array) $oPhpPresentationRead->getSlide(1)->getShapeCollection());
+        self::assertCount(1, $arrayShape);
+        self::assertInstanceOf(Comment::class, $arrayShape[0]);
+        self::assertEquals('Other slide', $arrayShape[0]->getText());
+        self::assertSame($oAuthorRead, $arrayShape[0]->getAuthor());
+    }
+
+    /**
+     * @dataProvider dataProviderCommentForms
+     */
+    #[DataProvider('dataProviderCommentForms')]
+    public function testCommentWrittenElsewhere(string $element, string $initials): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oPhpPresentation->getActiveSlide()->addShape(new Comment());
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new ODPresentationWriter($oPhpPresentation))->save($file);
+
+        // The comment as LibreOffice 26.8 writes it, after the notes of the slide
+        $annotation = '<presentation:notes/><' . $element . ' svg:x="2.65cm" svg:y="1.59cm" svg:width="0.825cm" svg:height="0.496cm">'
+            . '<dc:creator>Jane Doe</dc:creator><' . $initials . '>JD</' . $initials . '>'
+            . '<dc:date>2023-11-14T22:13:20.123456789</dc:date>'
+            . '<text:p>First line</text:p><text:list><text:list-item><text:p>Second line</text:p></text:list-item></text:list>'
+            . '</' . $element . '>';
+        $oZip = new ZipArchive();
+        $oZip->open($file);
+        $content = (string) $oZip->getFromName('content.xml');
+        $oZip->addFromString('content.xml', (string) preg_replace('#<officeooo:annotation.*</officeooo:annotation>#s', $annotation, $content));
+        $oZip->close();
+
+        $oPhpPresentationRead = (new ODPresentation())->load($file);
+        unlink($file);
+
+        $arrayShape = array_values((array) $oPhpPresentationRead->getActiveSlide()->getShapeCollection());
+        self::assertCount(1, $arrayShape);
+        self::assertInstanceOf(Comment::class, $arrayShape[0]);
+        self::assertEquals("First line\nSecond line", $arrayShape[0]->getText());
+        self::assertEquals(100, $arrayShape[0]->getOffsetX());
+        self::assertEquals(60, $arrayShape[0]->getOffsetY());
+        self::assertEquals(strtotime('2023-11-14T22:13:20'), $arrayShape[0]->getDate());
+        self::assertInstanceOf(Comment\Author::class, $arrayShape[0]->getAuthor());
+        self::assertEquals('Jane Doe', $arrayShape[0]->getAuthor()->getName());
+        self::assertEquals('JD', $arrayShape[0]->getAuthor()->getInitials());
+    }
+
+    public function testCommentTextWrittenByLibreOffice(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oPhpPresentation->getActiveSlide()->addShape((new Comment())->setText('Text'));
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new ODPresentationWriter($oPhpPresentation))->save($file);
+
+        // LibreOffice writes a space after a space, a tab and a line break as elements
+        $paragraph = '<text:p>two <text:s/>spaces<text:tab/>tab<text:line-break/>break <text:span>in <text:s text:c="2"/>span</text:span></text:p>';
+        $oZip = new ZipArchive();
+        $oZip->open($file);
+        $content = (string) $oZip->getFromName('content.xml');
+        $oZip->addFromString('content.xml', str_replace('<text:p>Text</text:p>', $paragraph, $content));
+        $oZip->close();
+
+        $oPhpPresentationRead = (new ODPresentation())->load($file);
+        unlink($file);
+
+        $arrayShape = array_values((array) $oPhpPresentationRead->getActiveSlide()->getShapeCollection());
+        self::assertCount(1, $arrayShape);
+        self::assertInstanceOf(Comment::class, $arrayShape[0]);
+        self::assertEquals("two  spaces\ttab\nbreak in   span", $arrayShape[0]->getText());
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function dataProviderCommentForms(): array
+    {
+        return [
+            'LibreOffice, ODF 1.3 and later' => ['officeooo:annotation', 'meta:creator-initials'],
+            'LibreOffice, ODF 1.2' => ['officeooo:annotation', 'loext:sender-initials'],
+            'the element of the standard' => ['office:annotation', 'text:sender-initials'],
         ];
     }
 }

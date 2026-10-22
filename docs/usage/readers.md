@@ -160,7 +160,7 @@ model, with the exceptions its notes list.
 |  | RichText (text box) | :material-alert-outline:<sup>35</sup> | :material-check: | :material-check: | :material-check: | :material-check: |
 |  | Table | :material-close: | :material-check: | :material-close: | :material-check: | :material-check: |
 |  | Chart | :material-close: | :material-check: | :material-close: | :material-check: | :material-check: |
-|  | Comment | :material-close: | :material-close: | :material-close: | :material-close: | :material-check: |
+|  | Comment | :material-close: | :material-check: | :material-close: | :material-close: | :material-check: |
 | **Text** | Paragraph alignment and indent | :material-close: | :material-alert-outline:<sup>36</sup> | :material-alert-outline:<sup>37</sup> | :material-check: | :material-check: |
 |  | Line spacing, spacing before/after | :material-close: | :material-alert-outline:<sup>38</sup> | :material-close: | :material-check: | :material-check: |
 |  | Bullets (character, colour, size) | :material-close: | :material-alert-outline:<sup>39</sup> | :material-alert-outline:<sup>40</sup> | :material-check: | :material-check: |
