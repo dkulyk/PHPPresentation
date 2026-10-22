@@ -171,7 +171,7 @@ model, with the exceptions its notes list.
 |  | Hyperlink on text | :material-close: | :material-check: | :material-alert-outline:<sup>44</sup> | :material-check: | :material-check: |
 |  | Fields (date/time, slide number) | :material-close: | :material-alert-outline:<sup>45</sup> | :material-close: | :material-check: | :material-check: |
 |  | Text box: insets, autofit, wrap, columns, vertical/RTL | :material-close: | :material-alert-outline:<sup>46</sup> | :material-alert-outline:<sup>47</sup> | :material-alert-outline:<sup>48</sup> | :material-check: |
-| **Table** | Merged cells (column span, row span) | :material-close: | :material-close: | :material-close: | :material-check: | :material-check: |
+| **Table** | Merged cells (column span, row span) | :material-close: | :material-check: | :material-close: | :material-check: | :material-check: |
 |  | Cell borders and fill | :material-close: | :material-alert-outline:<sup>49</sup> | :material-close: | :material-check: | :material-check: |
 |  | Header row | :material-close: | :material-check: | :material-close: | :material-check: | :material-check: |
 |  | Column widths, row heights | :material-close: | :material-alert-outline:<sup>50</sup> | :material-close: | :material-check: | :material-check: |

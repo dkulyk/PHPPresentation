@@ -2337,6 +2337,42 @@ class ContentTest extends PhpPresentationTestCase
         $this->assertZipXmlElementNotExists('content.xml', $element . '/style:graphic-properties');
     }
 
+    public function testTableWithRowspan(): void
+    {
+        $oShape = $this->oPresentation->getActiveSlide()->createTableShape(3);
+        $oShape->createRow()->getCell(0)->setRowSpan(2);
+        $oShape->createRow();
+        // A cell that spans both ways covers a block, and a span set on a cell it covers is ignored
+        $oShape->getRow(0)->getCell(1)->setColSpan(2)->setRowSpan(2);
+        $oShape->getRow(1)->getCell(2)->setColSpan(2);
+
+        $row = '/office:document-content/office:body/office:presentation/draw:page/draw:frame/table:table/table:table-row';
+        $this->assertZipXmlAttributeEquals('content.xml', $row . '[1]/*[1]', 'table:number-rows-spanned', '2');
+        $this->assertZipXmlAttributeNotExists('content.xml', $row . '[1]/*[1]', 'table:number-columns-spanned');
+        $this->assertZipXmlAttributeEquals('content.xml', $row . '[1]/*[2]', 'table:number-rows-spanned', '2');
+        $this->assertZipXmlAttributeEquals('content.xml', $row . '[1]/*[2]', 'table:number-columns-spanned', '2');
+        $this->assertZipXmlElementCount('content.xml', $row . '[1]/table:table-cell', 2);
+        $this->assertZipXmlElementCount('content.xml', $row . '[1]/table:covered-table-cell', 1);
+        // The rows below hold a covered cell for every column the span reaches
+        $this->assertZipXmlElementCount('content.xml', $row . '[2]/table:table-cell', 0);
+        $this->assertZipXmlElementCount('content.xml', $row . '[2]/table:covered-table-cell', 3);
+        $this->assertIsSchemaOpenDocumentValid('1.2');
+    }
+
+    public function testTableWithSpanPastTheEdge(): void
+    {
+        $oShape = $this->oPresentation->getActiveSlide()->createTableShape(2);
+        $oShape->createRow();
+        $oShape->createRow()->getCell(1)->setColSpan(5)->setRowSpan(5);
+        $oShape->getRow(0)->getCell(0)->setRowSpan(5);
+
+        $row = '/office:document-content/office:body/office:presentation/draw:page/draw:frame/table:table/table:table-row';
+        $this->assertZipXmlAttributeEquals('content.xml', $row . '[1]/*[1]', 'table:number-rows-spanned', '2');
+        $this->assertZipXmlAttributeNotExists('content.xml', $row . '[2]/*[2]', 'table:number-columns-spanned');
+        $this->assertZipXmlAttributeNotExists('content.xml', $row . '[2]/*[2]', 'table:number-rows-spanned');
+        $this->assertIsSchemaOpenDocumentValid('1.2');
+    }
+
     public function testTableWithColspan(): void
     {
         $value = mt_rand(2, 100);

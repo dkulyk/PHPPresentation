@@ -150,23 +150,23 @@ notes list.
 |  | Hyperlink on text | :material-check: | :material-close: | :material-check: | :material-check: | :material-check: | :material-check: |
 |  | Fields (date/time, slide number) | :material-alert-outline:<sup>36</sup> | :material-close: | :material-alert-outline:<sup>37</sup> | :material-alert-outline:<sup>38</sup> | :material-check: | :material-check: |
 |  | Text box: insets, autofit, wrap, columns, vertical/RTL | :material-close: | :material-close: | :material-alert-outline:<sup>39</sup> | :material-close: | :material-check: | :material-check: |
-| **Table** | Merged cells (column span, row span) | :material-alert-outline:<sup>40</sup> | :material-close: | :material-alert-outline:<sup>41</sup> | :material-alert-outline:<sup>42</sup> | :material-alert-outline:<sup>43</sup> | :material-check: |
+| **Table** | Merged cells (column span, row span) | :material-alert-outline:<sup>40</sup> | :material-close: | :material-check: | :material-alert-outline:<sup>41</sup> | :material-alert-outline:<sup>42</sup> | :material-check: |
 |  | Cell borders and fill | :material-close: | :material-close: | :material-check: | :material-close: | :material-check: | :material-check: |
 |  | Header row | :material-close: | :material-close: | :material-check: | :material-close: | :material-check: | :material-check: |
-|  | Column widths, row heights | :material-close: | :material-close: | :material-alert-outline:<sup>44</sup> | :material-close: | :material-check: | :material-check: |
+|  | Column widths, row heights | :material-close: | :material-close: | :material-alert-outline:<sup>43</sup> | :material-close: | :material-check: | :material-check: |
 | **Charts** | Area | :material-close: | :material-close: | :material-check: | :material-close: | :material-check: | :material-check: |
-|  | Bar | :material-close: | :material-close: | :material-alert-outline:<sup>45</sup> | :material-close: | :material-check: | :material-check: |
-|  | Bar3D | :material-close: | :material-close: | :material-alert-outline:<sup>46</sup> | :material-close: | :material-check: | :material-check: |
-|  | Doughnut | :material-close: | :material-close: | :material-alert-outline:<sup>47</sup> | :material-close: | :material-check: | :material-check: |
+|  | Bar | :material-close: | :material-close: | :material-alert-outline:<sup>44</sup> | :material-close: | :material-check: | :material-check: |
+|  | Bar3D | :material-close: | :material-close: | :material-alert-outline:<sup>45</sup> | :material-close: | :material-check: | :material-check: |
+|  | Doughnut | :material-close: | :material-close: | :material-alert-outline:<sup>46</sup> | :material-close: | :material-check: | :material-check: |
 |  | Line | :material-close: | :material-close: | :material-check: | :material-close: | :material-check: | :material-check: |
 |  | Pie | :material-close: | :material-close: | :material-check: | :material-close: | :material-check: | :material-check: |
-|  | Pie3D | :material-close: | :material-close: | :material-alert-outline:<sup>48</sup> | :material-close: | :material-check: | :material-check: |
+|  | Pie3D | :material-close: | :material-close: | :material-alert-outline:<sup>47</sup> | :material-close: | :material-check: | :material-check: |
 |  | Radar | :material-close: | :material-close: | :material-check: | :material-close: | :material-check: | :material-check: |
 |  | Scatter | :material-close: | :material-close: | :material-check: | :material-close: | :material-check: | :material-check: |
 |  | Chart title | :material-close: | :material-close: | :material-check: | :material-close: | :material-check: | :material-check: |
-|  | Legend | :material-close: | :material-close: | :material-alert-outline:<sup>49</sup> | :material-close: | :material-check: | :material-check: |
-|  | Axes (title, min/max, gridlines, format) | :material-close: | :material-close: | :material-alert-outline:<sup>50</sup> | :material-close: | :material-check: | :material-check: |
-|  | Series: labels, colours, markers | :material-close: | :material-close: | :material-alert-outline:<sup>51</sup> | :material-close: | :material-check: | :material-check: |
+|  | Legend | :material-close: | :material-close: | :material-alert-outline:<sup>48</sup> | :material-close: | :material-check: | :material-check: |
+|  | Axes (title, min/max, gridlines, format) | :material-close: | :material-close: | :material-alert-outline:<sup>49</sup> | :material-close: | :material-check: | :material-check: |
+|  | Series: labels, colours, markers | :material-close: | :material-close: | :material-alert-outline:<sup>50</sup> | :material-close: | :material-check: | :material-check: |
 |  | Chart language | :material-close: |  | :material-close: | :material-close: | :material-check: | :material-check: |
 
 1. Category, company, revision, status not written.
@@ -209,14 +209,13 @@ notes list.
 38. Static placeholder text, not computed.
 39. No vertical text; autofit as auto-grow.
 40. Colspan only; spanned cells still emitted.
-41. Column span only.
-42. Colspan only; spanned cells still emitted.
-43. Corner of two-way span written unmerged.
-44. Row heights only.
-45. Gap width not written; overlap from grouping.
-46. View3D, gap width not written.
-47. Hole size, first slice angle not written.
-48. View3D not written.
-49. No fill or border.
-50. No number format, tick marks, reverse order.
-51. No label position or series-name label.
+41. Colspan only; spanned cells still emitted.
+42. Corner of two-way span written unmerged.
+43. Row heights only.
+44. Gap width not written; overlap from grouping.
+45. View3D, gap width not written.
+46. Hole size, first slice angle not written.
+47. View3D not written.
+48. No fill or border.
+49. No number format, tick marks, reverse order.
+50. No label position or series-name label.
