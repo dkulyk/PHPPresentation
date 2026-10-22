@@ -92,6 +92,11 @@ class Note implements ComparableInterface, ShapeContainerInterface
         $this->identifier = md5(mt_rand(0, 9999) . time());
     }
 
+    public function __clone()
+    {
+        $this->cloneShapeCollection();
+    }
+
     /**
      * Create rich text shape.
      */
