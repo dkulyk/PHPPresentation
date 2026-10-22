@@ -155,6 +155,42 @@ class PptSlidesTest extends PhpPresentationTestCase
         $this->assertIsSchemaECMA376Valid();
     }
 
+    public function testAnimationIdenticalShapes(): void
+    {
+        $oSlide = $this->oPresentation->getActiveSlide();
+        $oShape1 = $oSlide->createRichTextShape();
+        $oShape1->createTextRun('same');
+        $oShape2 = $oSlide->createRichTextShape();
+        $oShape2->createTextRun('same');
+        $oAnimation = new Animation();
+        $oAnimation->addShape($oShape1);
+        $oSlide->addAnimation($oAnimation);
+
+        $this->assertZipXmlAttributeEquals('ppt/slides/slide1.xml', '/p:sld/p:cSld/p:spTree/p:sp[1]/p:nvSpPr/p:cNvPr', 'id', 2);
+        $this->assertZipXmlAttributeEquals('ppt/slides/slide1.xml', '/p:sld/p:timing//p:spTgt', 'spid', 2);
+        $this->assertZipXmlAttributeEquals('ppt/slides/slide1.xml', '/p:sld/p:timing/p:bldLst/p:bldP', 'spid', 2);
+        $this->assertIsSchemaECMA376Valid();
+    }
+
+    public function testAnimationGroup(): void
+    {
+        $oSlide = $this->oPresentation->getActiveSlide();
+        $oGroup = $oSlide->createGroup();
+        $oGroup->createRichTextShape();
+        $oShapeInGroup = $oGroup->createLineShape(10, 10, 20, 20);
+        $oShapeAfterGroup = $oSlide->createRichTextShape();
+        $oAnimation = new Animation();
+        $oAnimation->addShape($oShapeInGroup);
+        $oAnimation->addShape($oShapeAfterGroup);
+        $oSlide->addAnimation($oAnimation);
+
+        $this->assertZipXmlAttributeEquals('ppt/slides/slide1.xml', '/p:sld/p:cSld/p:spTree/p:grpSp/p:cxnSp/p:nvCxnSpPr/p:cNvPr', 'id', 4);
+        $this->assertZipXmlAttributeEquals('ppt/slides/slide1.xml', '/p:sld/p:cSld/p:spTree/p:sp/p:nvSpPr/p:cNvPr', 'id', 5);
+        $this->assertZipXmlAttributeEquals('ppt/slides/slide1.xml', '/p:sld/p:timing//p:par[1]/p:cTn/p:childTnLst/p:set/p:cBhvr/p:tgtEl/p:spTgt', 'spid', 4);
+        $this->assertZipXmlAttributeEquals('ppt/slides/slide1.xml', '/p:sld/p:timing//p:par[2]/p:cTn/p:childTnLst/p:set/p:cBhvr/p:tgtEl/p:spTgt', 'spid', 5);
+        $this->assertIsSchemaECMA376Valid();
+    }
+
     public function testShapeDecorative(): void
     {
         $oSlide = $this->oPresentation->getActiveSlide();
