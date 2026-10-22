@@ -225,7 +225,7 @@ model, with the exceptions its notes list.
 33. Group geometry not read; child anchors raw.
 34. Child images kept as external paths.
 35. Plain text; formatting not read.
-36. List items lose alignment; hanging indent read positive.
+36. List items lose alignment.
 37. Alignment applied to first paragraph only.
 38. Lost on list items.
 39. No bullet colour.

@@ -2070,6 +2070,50 @@ class ODPresentationTest extends TestCase
         ], $read);
     }
 
+    public function testListIndentSurvivesTheRoundTrip(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        foreach ([[80, -40], [40, -40], [60, 0]] as [$marginLeft, $indent]) {
+            $oShape = $oPhpPresentation->getActiveSlide()->createRichTextShape();
+            $oShape->getActiveParagraph()->getBulletStyle()->setBulletType(Bullet::TYPE_BULLET);
+            $oShape->getActiveParagraph()->getAlignment()->setMarginLeft($marginLeft)->setIndent($indent);
+            $oShape->createTextRun('Item');
+        }
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new ODPresentationWriter($oPhpPresentation))->save($file);
+
+        // The second list the way LibreOffice writes it, with no space before a marker at 0, and
+        // the third one in the label alignment mode of ODF 1.2
+        $oZip = new ZipArchive();
+        $oZip->open($file);
+        $sContent = $oZip->getFromName('content.xml');
+        self::assertIsString($sContent);
+        $sContent = (string) preg_replace('#(<text:list-style style:name="L2">.*?<style:list-level-properties) text:space-before="0cm"#', '$1', $sContent, 1, $count);
+        self::assertEquals(1, $count);
+        $sContent = (string) preg_replace(
+            '#(<text:list-style style:name="L3">.*?)<style:list-level-properties [^>]*/>#',
+            '$1<style:list-level-properties text:list-level-position-and-space-mode="label-alignment"><style:list-level-label-alignment text:label-followed-by="listtab" fo:margin-left="1.5875cm" fo:text-indent="0cm"/></style:list-level-properties>',
+            $sContent,
+            1,
+            $count
+        );
+        self::assertEquals(1, $count);
+        $oZip->deleteName('content.xml');
+        $oZip->addFromString('content.xml', $sContent);
+        $oZip->close();
+
+        $oPhpPresentationRead = (new ODPresentation())->load($file);
+        unlink($file);
+
+        $read = [];
+        foreach ($oPhpPresentationRead->getActiveSlide()->getShapeCollection() as $oShape) {
+            self::assertInstanceOf(RichText::class, $oShape);
+            $read[] = [$oShape->getParagraph(0)->getAlignment()->getMarginLeft(), $oShape->getParagraph(0)->getAlignment()->getIndent()];
+        }
+        self::assertEquals([[80, -40], [40, -40], [60, 0]], $read);
+    }
+
     public function testTableSurvivesTheRoundTrip(): void
     {
         $oPhpPresentation = new PhpPresentation();
