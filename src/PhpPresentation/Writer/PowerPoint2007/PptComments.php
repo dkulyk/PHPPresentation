@@ -28,6 +28,13 @@ use PhpOffice\PhpPresentation\Slide;
 
 class PptComments extends AbstractDecoratorWriter
 {
+    /**
+     * The number of comments written so far, by the id of their author.
+     *
+     * @var array<int, int>
+     */
+    protected $arrayLastIdx = [];
+
     public function render(): ZipInterface
     {
         foreach ($this->getPresentation()->getAllSlides() as $numSlide => $oSlide) {
@@ -64,14 +71,18 @@ class PptComments extends AbstractDecoratorWriter
         $objWriter->startElement('p:cmLst');
         $objWriter->writeAttribute('xmlns:p', 'http://schemas.openxmlformats.org/presentationml/2006/main');
 
-        foreach ($arrayComment as $idxComment => $oComment) {
+        foreach ($arrayComment as $oComment) {
+            // `CommentAuthors` has given every author its id, and 0 to the author of the comments that have none
             $oAuthor = $oComment->getAuthor();
+            $authorId = $oAuthor instanceof Comment\Author ? $oAuthor->getIndex() : 0;
+            $this->arrayLastIdx[$authorId] = ($this->arrayLastIdx[$authorId] ?? 0) + 1;
 
             // p:cmLst > p:cm
             $objWriter->startElement('p:cm');
-            $objWriter->writeAttribute('authorId', $oAuthor instanceof Comment\Author ? $oAuthor->getIndex() : 0);
+            $objWriter->writeAttribute('authorId', $authorId);
             $objWriter->writeAttribute('dt', date('Y-m-d\TH:i:s.000000000', $oComment->getDate()));
-            $objWriter->writeAttribute('idx', $idxComment);
+            // The comments of an author are numbered from 1 through the presentation
+            $objWriter->writeAttribute('idx', $this->arrayLastIdx[$authorId]);
 
             // p:cmLst > p:cm > p:pos
             // Uses 1/8pt for positionning
