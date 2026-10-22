@@ -28,8 +28,14 @@ class PptTheme extends AbstractDecoratorWriter
 {
     public function render(): ZipInterface
     {
+        $oMasterSlide = null;
         foreach ($this->oPresentation->getAllMasterSlides() as $oMasterSlide) {
             $this->getZip()->addFromString('ppt/theme/theme' . $oMasterSlide->getRelsIndex() . '.xml', $this->writeTheme($oMasterSlide));
+        }
+
+        // The notes master takes a theme part of its own, as the last slide master has it
+        if ($oMasterSlide instanceof Slide\SlideMaster && $this->hasNotes()) {
+            $this->getZip()->addFromString('ppt/theme/theme' . (count($this->oPresentation->getAllMasterSlides()) + 1) . '.xml', $this->writeTheme($oMasterSlide));
         }
 
         return $this->getZip();
