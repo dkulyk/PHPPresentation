@@ -2176,8 +2176,7 @@ class ContentTest extends PhpPresentationTestCase
 
     public function testTableCellFill(): void
     {
-        $oColor = new Color();
-        $oColor->setRGB(Color::COLOR_BLUE);
+        $oColor = new Color(Color::COLOR_BLUE);
 
         $oFill = new Fill();
         $oFill->setFillType(Fill::FILL_SOLID)->setStartColor($oColor);
@@ -2191,13 +2190,13 @@ class ContentTest extends PhpPresentationTestCase
         $this->assertZipXmlElementExists('content.xml', $element);
         $this->assertZipXmlAttributeEquals('content.xml', $element, 'style:family', 'table-cell');
 
-        $element = $this->getTableCellStyleXPath(1, 1) . '/style:graphic-properties';
+        // The fill of a cell is its background colour, on the properties ODF gives a table cell
+        $element = $this->getTableCellStyleXPath(1, 1) . '/style:table-cell-properties';
         $this->assertZipXmlElementExists('content.xml', $element);
-        $this->assertZipXmlAttributeEquals('content.xml', $element, 'draw:fill', 'solid');
-        $this->assertZipXmlAttributeStartsWith('content.xml', $element, 'draw:fill-color', '#');
-        $this->assertZipXmlAttributeEndsWith('content.xml', $element, 'draw:fill-color', $oColor->getRGB());
+        $this->assertZipXmlAttributeEquals('content.xml', $element, 'fo:background-color', '#' . $oColor->getRGB());
+        $this->assertZipXmlElementNotExists('content.xml', $this->getTableCellStyleXPath(1, 1) . '/style:graphic-properties');
 
-        $this->assertIsSchemaOpenDocumentNotValid('1.2');
+        $this->assertIsSchemaOpenDocumentValid('1.2');
     }
 
     public function testTableRowFill(): void
@@ -2211,10 +2210,8 @@ class ContentTest extends PhpPresentationTestCase
 
         // ODF puts no fill on a table-row style, so the fill of the row lands on each of its cells
         foreach ([1, 2] as $cell) {
-            $element = $this->getTableCellStyleXPath(1, $cell) . '/style:graphic-properties';
-            $this->assertZipXmlElementExists('content.xml', $element);
-            $this->assertZipXmlAttributeEquals('content.xml', $element, 'draw:fill', 'solid');
-            $this->assertZipXmlAttributeEquals('content.xml', $element, 'draw:fill-color', '#E06B20');
+            $element = $this->getTableCellStyleXPath(1, $cell) . '/style:table-cell-properties';
+            $this->assertZipXmlAttributeEquals('content.xml', $element, 'fo:background-color', '#E06B20');
         }
     }
 
@@ -2305,11 +2302,11 @@ class ContentTest extends PhpPresentationTestCase
         $oShape->createRow();
 
         // Nobody asked for a fill, on the cell or on its row, which is how a table starts out:
-        // the cell style is still written, and carries no graphic properties at all
+        // the cell style is still written, and names no fill at all
         foreach ([1, 2] as $cell) {
             $element = $this->getTableCellStyleXPath(1, $cell) . '';
             $this->assertZipXmlElementExists('content.xml', $element);
-            $this->assertZipXmlElementNotExists('content.xml', $element . '/style:graphic-properties');
+            $this->assertZipXmlAttributeNotExists('content.xml', $element . '/style:table-cell-properties', 'fo:background-color');
         }
 
         $this->assertIsSchemaOpenDocumentValid('1.2');
@@ -2328,13 +2325,26 @@ class ContentTest extends PhpPresentationTestCase
         // it stays transparent while its neighbour takes the colour of the row
         $oRow->getCell(1)->getFill()->setFillType(Fill::FILL_NONE);
 
-        $element = $this->getTableCellStyleXPath(1, 1) . '/style:graphic-properties';
-        $this->assertZipXmlElementExists('content.xml', $element);
-        $this->assertZipXmlAttributeEquals('content.xml', $element, 'draw:fill-color', '#E06B20');
+        $element = $this->getTableCellStyleXPath(1, 1) . '/style:table-cell-properties';
+        $this->assertZipXmlAttributeEquals('content.xml', $element, 'fo:background-color', '#E06B20');
 
-        $element = $this->getTableCellStyleXPath(1, 2) . '';
-        $this->assertZipXmlElementExists('content.xml', $element);
-        $this->assertZipXmlElementNotExists('content.xml', $element . '/style:graphic-properties');
+        $element = $this->getTableCellStyleXPath(1, 2) . '/style:table-cell-properties';
+        $this->assertZipXmlAttributeEquals('content.xml', $element, 'fo:background-color', 'transparent');
+    }
+
+    public function testTableCellFillNoneIsNotFillUnset(): void
+    {
+        $oRow = $this->oPresentation->getActiveSlide()->createTableShape(2)->createRow();
+        $oRow->getCell(1)->getFill()->setFillType(Fill::FILL_NONE);
+
+        // A cell that was given no fill names none, and the reading application paints it as it
+        // sees fit; a cell that refuses a fill says it is transparent
+        $element = $this->getTableCellStyleXPath(1, 1) . '/style:table-cell-properties';
+        $this->assertZipXmlAttributeNotExists('content.xml', $element, 'fo:background-color');
+        $element = $this->getTableCellStyleXPath(1, 2) . '/style:table-cell-properties';
+        $this->assertZipXmlAttributeEquals('content.xml', $element, 'fo:background-color', 'transparent');
+
+        $this->assertIsSchemaOpenDocumentValid('1.2');
     }
 
     public function testTableCellTextLayout(): void
