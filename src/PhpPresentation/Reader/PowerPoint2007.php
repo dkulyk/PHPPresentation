@@ -1568,10 +1568,12 @@ class PowerPoint2007 implements ReaderInterface
 
         $oElement = $document->getElement('p:nvSpPr/p:nvPr/p:ph', $node);
         if ($oElement instanceof DOMElement) {
-            if ($oElement->hasAttribute('type')) {
-                $placeholder = new Placeholder($oElement->getAttribute('type'));
-                $oShape->setPlaceHolder($placeholder);
+            // a placeholder without a type is an object placeholder
+            $placeholder = new Placeholder($oElement->getAttribute('type') ?: 'obj');
+            if ($oElement->hasAttribute('idx')) {
+                $placeholder->setIdx((int) $oElement->getAttribute('idx'));
             }
+            $oShape->setPlaceHolder($placeholder);
         }
 
         // Load shape effects
