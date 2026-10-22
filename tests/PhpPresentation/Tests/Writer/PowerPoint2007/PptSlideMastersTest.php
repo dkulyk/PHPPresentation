@@ -26,6 +26,7 @@ use DOMXPath;
 use PhpOffice\PhpPresentation\Shape\Drawing\File as ShapeDrawingFile;
 use PhpOffice\PhpPresentation\Slide\SlideLayout;
 use PhpOffice\PhpPresentation\Slide\SlideMaster;
+use PhpOffice\PhpPresentation\Style\Font;
 use PhpOffice\PhpPresentation\Tests\PhpPresentationTestCase;
 use PhpOffice\PhpPresentation\Writer\PowerPoint2007\PptSlideMasters;
 use PHPUnit\Framework\MockObject\MockBuilder;
@@ -118,6 +119,19 @@ class PptSlideMastersTest extends PhpPresentationTestCase
         $relationship = '/Relationships/Relationship[@Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide"][@Target="../slides/slide2.xml"]';
         $this->assertZipXmlElementExists('ppt/slideLayouts/_rels/slideLayout1.xml.rels', $relationship);
         $this->assertZipXmlAttributeStartsWith('ppt/slideLayouts/slideLayout1.xml', '/p:sldLayout/p:cSld/p:spTree/p:sp/p:nvSpPr/p:cNvPr/a:hlinkClick', 'r:id', 'rId');
+
+        $this->assertIsSchemaECMA376Valid();
+    }
+
+    public function testTextStyleFont(): void
+    {
+        $oTextStyles = $this->oPresentation->getAllMasterSlides()[0]->getTextStyles();
+        $oTextStyles->getTitleStyleAtLvl(1)->getFont()->setName('Arial');
+        $oTextStyles->getBodyStyleAtLvl(1)->getFont()->setName('MS Gothic')->setFormat(Font::FORMAT_EAST_ASIAN);
+
+        $this->assertZipXmlAttributeEquals('ppt/slideMasters/slideMaster1.xml', '/p:sldMaster/p:txStyles/p:titleStyle/a:lvl1pPr/a:defRPr/a:latin', 'typeface', 'Arial');
+        $this->assertZipXmlAttributeEquals('ppt/slideMasters/slideMaster1.xml', '/p:sldMaster/p:txStyles/p:bodyStyle/a:lvl1pPr/a:defRPr/a:ea', 'typeface', 'MS Gothic');
+        $this->assertZipXmlAttributeEquals('ppt/slideMasters/slideMaster1.xml', '/p:sldMaster/p:txStyles/p:otherStyle/a:defPPr/a:defRPr/a:latin', 'typeface', 'Calibri');
 
         $this->assertIsSchemaECMA376Valid();
     }
