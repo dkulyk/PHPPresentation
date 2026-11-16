@@ -1941,6 +1941,185 @@ class ODPresentationTest extends TestCase
         }
     }
 
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function dataProviderFieldFormat(): array
+    {
+        $types = [];
+        foreach (['slidenum', 'slidecount', 'author', 'file', 'file1', 'file2', 'file3', 'datetime', 'datetime1', 'datetime2', 'datetime3', 'datetime5', 'datetime8', 'datetime9', 'datetime10', 'datetime11', 'datetime12', 'datetime13'] as $type) {
+            $types[$type] = [$type, $type];
+        }
+
+        // LibreOffice has no data style for these three, and they wear the nearest one it has
+        return $types + ['datetime4' => ['datetime4', 'datetime3'], 'datetime6' => ['datetime6', 'datetime3'], 'datetime7' => ['datetime7', 'datetime5']];
+    }
+
+    /**
+     * @dataProvider dataProviderFieldFormat
+     */
+    #[DataProvider('dataProviderFieldFormat')]
+    public function testFieldFormatSurvivesTheRoundTrip(string $type, string $expected): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oPhpPresentation->getActiveSlide()->createRichTextShape()->getActiveParagraph()->createField($type, 'Sample');
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new ODPresentationWriter($oPhpPresentation))->save($file);
+        $oPhpPresentationRead = (new ODPresentation())->load($file);
+        unlink($file);
+
+        $arrayShape = array_values((array) $oPhpPresentationRead->getActiveSlide()->getShapeCollection());
+        self::assertInstanceOf(RichText::class, $arrayShape[0]);
+        $arrayElements = $arrayShape[0]->getParagraph()->getRichTextElements();
+        self::assertCount(1, $arrayElements);
+        self::assertInstanceOf(Field::class, $arrayElements[0]);
+        self::assertEquals($expected, $arrayElements[0]->getType());
+        self::assertEquals('Sample', $arrayElements[0]->getText());
+    }
+
+    /**
+     * The data styles share their names with the text styles: `T2` is a time style and a text
+     * style, and neither is read as the other, whichever is written last.
+     */
+    public function testFieldDataStyleNamedAsATextStyle(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oParagraph = $oPhpPresentation->getActiveSlide()->createRichTextShape()->getActiveParagraph();
+        $oParagraph->createTextRun('at ');
+        $oParagraph->createField('datetime10', '13:49')->getFont()->setBold(true);
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new ODPresentationWriter($oPhpPresentation))->save($file);
+
+        // the Writer writes the data styles first; here they are last
+        $oZip = new ZipArchive();
+        $oZip->open($file);
+        $content = (string) preg_replace(
+            '#(<number:time-style style:name="T2">.*?</number:time-style>)(.*?<style:style style:name="T2".*?)(</office:automatic-styles>)#',
+            '$2$1$3',
+            (string) $oZip->getFromName('content.xml'),
+            -1,
+            $count
+        );
+        $oZip->addFromString('content.xml', $content);
+        $oZip->close();
+        self::assertEquals(1, $count);
+
+        $oPhpPresentationRead = (new ODPresentation())->load($file);
+        unlink($file);
+
+        $arrayShape = array_values((array) $oPhpPresentationRead->getActiveSlide()->getShapeCollection());
+        self::assertInstanceOf(RichText::class, $arrayShape[0]);
+        $oField = $arrayShape[0]->getParagraph()->getRichTextElements()[1];
+        self::assertInstanceOf(Field::class, $oField);
+        self::assertEquals('datetime10', $oField->getType());
+        self::assertTrue($oField->getFont()->isBold());
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: string, 2: string, 3?: string}>
+     */
+    public static function dataProviderFieldDataStyle(): array
+    {
+        $time = '<number:hours/><number:text>:</number:text><number:minutes/><number:text>:</number:text>';
+
+        return [
+            // four of the styles LibreOffice has and the Writer never writes
+            'automatic order' => ['datetime13', '<number:hours/><number:text>:</number:text><number:minutes/><number:text>:</number:text><number:seconds/><number:am-pm/>', 'datetime11', ' number:automatic-order="true"'],
+            'two-digit year' => ['datetime1', '<number:day number:style="long"/><number:text>.</number:text><number:month number:style="long"/><number:text>.</number:text><number:year/>', 'datetime'],
+            'seconds' => ['datetime10', $time . '<number:seconds/>', 'datetime11'],
+            'hundredths' => ['datetime12', $time . '<number:seconds number:decimal-places="2"/><number:am-pm/>', 'datetime13'],
+            // a style of no known format leaves what the element alone says
+            'unknown date' => ['datetime3', '<number:year number:style="long"/><number:text>-</number:text><number:month number:style="long"/>', 'datetime'],
+            'unknown time' => ['datetime12', '<number:minutes/>', 'datetime10'],
+        ];
+    }
+
+    /**
+     * @dataProvider dataProviderFieldDataStyle
+     */
+    #[DataProvider('dataProviderFieldDataStyle')]
+    public function testFieldDataStyleWrittenElsewhere(string $type, string $style, string $expected, string $attributes = ''): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oPhpPresentation->getActiveSlide()->createRichTextShape()->getActiveParagraph()->createField($type, 'Sample');
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new ODPresentationWriter($oPhpPresentation))->save($file);
+
+        $oZip = new ZipArchive();
+        $oZip->open($file);
+        $content = (string) preg_replace(
+            '#(<number:(?:date|time)-style style:name="[^"]+")>.*?(</number:(?:date|time)-style>)#',
+            '$1' . $attributes . '>' . $style . '$2',
+            (string) $oZip->getFromName('content.xml'),
+            -1,
+            $count
+        );
+        $oZip->addFromString('content.xml', $content);
+        $oZip->close();
+        self::assertEquals(1, $count);
+
+        $oPhpPresentationRead = (new ODPresentation())->load($file);
+        unlink($file);
+
+        $arrayShape = array_values((array) $oPhpPresentationRead->getActiveSlide()->getShapeCollection());
+        self::assertInstanceOf(RichText::class, $arrayShape[0]);
+        $oField = $arrayShape[0]->getParagraph()->getRichTextElements()[0];
+        self::assertInstanceOf(Field::class, $oField);
+        self::assertEquals($expected, $oField->getType());
+    }
+
+    /**
+     * @return array<string, array{string, string, string, array<array{string, string}>}>
+     */
+    public static function dataProviderFieldRewritten(): array
+    {
+        return [
+            // LibreOffice writes a date and a time as a span each, with a span of a space between
+            'a span each' => [
+                'datetime8',
+                '</text:date> <text:time style:data-style-name="T5"/>',
+                '</text:date></text:span><text:span><text:s/></text:span><text:span><text:time style:data-style-name="T5">1:49 PM</text:time>',
+                [['datetime1', 'Sample'], ['', ' '], ['datetime12', '1:49 PM']],
+            ],
+            'a style that is not there' => ['datetime3', 'style:data-style-name="D6"', 'style:data-style-name="D9"', [['datetime', 'Sample']]],
+        ];
+    }
+
+    /**
+     * @param array<array{string, string}> $expected the type, none for a run, and the text of each element
+     *
+     * @dataProvider dataProviderFieldRewritten
+     */
+    #[DataProvider('dataProviderFieldRewritten')]
+    public function testFieldWrittenElsewhere(string $type, string $search, string $replace, array $expected): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oPhpPresentation->getActiveSlide()->createRichTextShape()->getActiveParagraph()->createField($type, 'Sample');
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new ODPresentationWriter($oPhpPresentation))->save($file);
+
+        $oZip = new ZipArchive();
+        $oZip->open($file);
+        $oZip->addFromString('content.xml', str_replace($search, $replace, (string) $oZip->getFromName('content.xml'), $count));
+        $oZip->close();
+        self::assertEquals(1, $count);
+
+        $oPhpPresentationRead = (new ODPresentation())->load($file);
+        unlink($file);
+
+        $arrayShape = array_values((array) $oPhpPresentationRead->getActiveSlide()->getShapeCollection());
+        self::assertInstanceOf(RichText::class, $arrayShape[0]);
+        $actual = [];
+        foreach ($arrayShape[0]->getParagraph()->getRichTextElements() as $oElement) {
+            $actual[] = [$oElement instanceof Field ? $oElement->getType() : '', $oElement->getText()];
+        }
+        self::assertEquals($expected, $actual);
+    }
+
     public function testFieldSurvivesTheRoundTrip(): void
     {
         $oPhpPresentation = new PhpPresentation();
