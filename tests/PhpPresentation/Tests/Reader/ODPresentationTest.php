@@ -1231,26 +1231,43 @@ class ODPresentationTest extends TestCase
     }
 
     /**
-     * LibreOffice keeps the language of a presentation in the default style; without dc:language
-     * it is read from there.
+     * @return array<string, array{string, string, string}>
      */
-    public function testDocumentLanguageFromTheDefaultStyle(): void
+    public static function dataProviderDocumentLanguageDefaultStyle(): array
     {
-        $oPhpPresentation = new PhpPresentation();
-        $oPhpPresentation->getDocumentProperties()->setLanguage('uk-UA');
+        $default = '<style:text-properties fo:language="uk" fo:country="UA"/>';
 
+        return [
+            'no dc:language' => ['', $default, 'uk-UA'],
+            'dc:language wins' => ['<dc:language>de-DE</dc:language>', $default, 'de-DE'],
+            'Asian language only' => ['', '<style:text-properties style:language-asian="ja" style:country-asian="JP"/>', 'en-US'],
+            'not a language tag' => ['<dc:language>de-DE</dc:language>', '<style:text-properties fo:language="en_US"/>', 'de-DE'],
+        ];
+    }
+
+    /**
+     * LibreOffice keeps the language of a presentation in the Latin language of the default style;
+     * it is read from there, and dc:language, when there is one, wins.
+     *
+     * @dataProvider dataProviderDocumentLanguageDefaultStyle
+     */
+    #[DataProvider('dataProviderDocumentLanguageDefaultStyle')]
+    public function testDocumentLanguageFromTheDefaultStyle(string $dcLanguage, string $textProperties, string $expected): void
+    {
         $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
-        (new ODPresentationWriter($oPhpPresentation))->save($file);
+        (new ODPresentationWriter(new PhpPresentation()))->save($file);
         $zip = new ZipArchive();
         $zip->open($file);
         $meta = (string) $zip->getFromName('meta.xml');
-        $zip->addFromString('meta.xml', (string) preg_replace('#<dc:language>[^<]*</dc:language>#', '', $meta));
+        $styles = (string) $zip->getFromName('styles.xml');
+        $zip->addFromString('meta.xml', (string) preg_replace('#<dc:language>[^<]*</dc:language>#', $dcLanguage, $meta));
+        $zip->addFromString('styles.xml', (string) preg_replace('#<style:text-properties fo:language="en" fo:country="US"/>#', $textProperties, $styles));
         $zip->close();
         $oPhpPresentationRead = (new ODPresentation())->load($file);
         unlink($file);
 
-        self::assertStringContainsString('<dc:language>', $meta);
-        self::assertEquals('uk-UA', $oPhpPresentationRead->getDocumentProperties()->getLanguage());
+        self::assertStringContainsString('<style:text-properties fo:language="en" fo:country="US"/>', $styles);
+        self::assertEquals($expected, $oPhpPresentationRead->getDocumentProperties()->getLanguage());
     }
 
     /**

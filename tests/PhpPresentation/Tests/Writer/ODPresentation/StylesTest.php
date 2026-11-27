@@ -290,8 +290,8 @@ class StylesTest extends PhpPresentationTestCase
         $this->oPresentation->getDocumentProperties()->setLanguage('uk-UA');
         $this->assertZipXmlAttributeEquals('styles.xml', $element, 'fo:language', 'uk');
         $this->assertZipXmlAttributeEquals('styles.xml', $element, 'fo:country', 'UA');
-        $this->assertZipXmlAttributeEquals('styles.xml', $element, 'style:language-asian', 'uk');
-        $this->assertZipXmlAttributeEquals('styles.xml', $element, 'style:country-complex', 'UA');
+        $this->assertZipXmlAttributeNotExists('styles.xml', $element, 'style:language-asian');
+        $this->assertZipXmlAttributeNotExists('styles.xml', $element, 'style:language-complex');
         $this->assertZipXmlAttributeNotExists('styles.xml', $element, 'style:rfc-language-tag');
         $this->assertIsSchemaOpenDocumentValid('1.2');
 
@@ -300,7 +300,6 @@ class StylesTest extends PhpPresentationTestCase
         $this->assertZipXmlAttributeEquals('styles.xml', $element, 'fo:language', 'sr');
         $this->assertZipXmlAttributeEquals('styles.xml', $element, 'fo:script', 'Latn');
         $this->assertZipXmlAttributeEquals('styles.xml', $element, 'style:rfc-language-tag', 'sr-Latn-RS');
-        $this->assertZipXmlAttributeEquals('styles.xml', $element, 'style:rfc-language-tag-asian', 'sr-Latn-RS');
         $this->assertIsSchemaOpenDocumentValid('1.2');
     }
 
