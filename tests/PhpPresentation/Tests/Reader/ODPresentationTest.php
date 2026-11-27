@@ -1231,6 +1231,46 @@ class ODPresentationTest extends TestCase
     }
 
     /**
+     * @return array<string, array{string, string, string}>
+     */
+    public static function dataProviderDocumentLanguageDefaultStyle(): array
+    {
+        $default = '<style:text-properties fo:language="uk" fo:country="UA"/>';
+
+        return [
+            'no dc:language' => ['', $default, 'uk-UA'],
+            'dc:language wins' => ['<dc:language>de-DE</dc:language>', $default, 'de-DE'],
+            'Asian language only' => ['', '<style:text-properties style:language-asian="ja" style:country-asian="JP"/>', 'en-US'],
+            'not a language tag' => ['<dc:language>de-DE</dc:language>', '<style:text-properties fo:language="en_US"/>', 'de-DE'],
+        ];
+    }
+
+    /**
+     * LibreOffice keeps the language of a presentation in the Latin language of the default style;
+     * it is read from there, and dc:language, when there is one, wins.
+     *
+     * @dataProvider dataProviderDocumentLanguageDefaultStyle
+     */
+    #[DataProvider('dataProviderDocumentLanguageDefaultStyle')]
+    public function testDocumentLanguageFromTheDefaultStyle(string $dcLanguage, string $textProperties, string $expected): void
+    {
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new ODPresentationWriter(new PhpPresentation()))->save($file);
+        $zip = new ZipArchive();
+        $zip->open($file);
+        $meta = (string) $zip->getFromName('meta.xml');
+        $styles = (string) $zip->getFromName('styles.xml');
+        $zip->addFromString('meta.xml', (string) preg_replace('#<dc:language>[^<]*</dc:language>#', $dcLanguage, $meta));
+        $zip->addFromString('styles.xml', (string) preg_replace('#<style:text-properties fo:language="en" fo:country="US"/>#', $textProperties, $styles));
+        $zip->close();
+        $oPhpPresentationRead = (new ODPresentation())->load($file);
+        unlink($file);
+
+        self::assertStringContainsString('<style:text-properties fo:language="en" fo:country="US"/>', $styles);
+        self::assertEquals($expected, $oPhpPresentationRead->getDocumentProperties()->getLanguage());
+    }
+
+    /**
      * @return array<string, array{null|string, string, string}>
      */
     public static function dataProviderRunLanguage(): array

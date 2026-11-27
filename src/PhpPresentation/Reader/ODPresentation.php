@@ -28,6 +28,7 @@ use PhpOffice\PhpPresentation\AbstractShape;
 use PhpOffice\PhpPresentation\DocumentProperties;
 use PhpOffice\PhpPresentation\Exception\FileNotFoundException;
 use PhpOffice\PhpPresentation\Exception\InvalidFileFormatException;
+use PhpOffice\PhpPresentation\Exception\InvalidParameterException;
 use PhpOffice\PhpPresentation\PhpPresentation;
 use PhpOffice\PhpPresentation\PresentationProperties;
 use PhpOffice\PhpPresentation\Shape\AutoShape;
@@ -431,12 +432,12 @@ class ODPresentation implements ReaderInterface
         $this->oZip->open($pFilename);
 
         $this->oXMLReader = new XMLReader();
-        if (false !== $this->oXMLReader->getDomFromZip($pFilename, 'meta.xml')) {
-            $this->loadDocumentProperties();
-        }
-        $this->oXMLReader = new XMLReader();
         if (false !== $this->oXMLReader->getDomFromZip($pFilename, 'styles.xml')) {
             $this->loadStylesFile();
+        }
+        $this->oXMLReader = new XMLReader();
+        if (false !== $this->oXMLReader->getDomFromZip($pFilename, 'meta.xml')) {
+            $this->loadDocumentProperties();
         }
         $this->oXMLReader = new XMLReader();
         if (false !== $this->oXMLReader->getDomFromZip($pFilename, 'content.xml')) {
@@ -1134,12 +1135,12 @@ class ODPresentation implements ReaderInterface
     /**
      * Put back together the language a text style splits: the whole tag where
      * `style:rfc-language-tag` holds it, else the language and the country. The family the style
-     * is spelled for is asked first, and the other two after it.
+     * is spelled for is asked first, and the other two after it unless `$otherFamilies` is false.
      */
-    protected function loadLanguage(DOMElement $nodeTextProperties, string $format): ?string
+    protected function loadLanguage(DOMElement $nodeTextProperties, string $format, bool $otherFamilies = true): ?string
     {
         $families = [Font::FORMAT_LATIN => '', Font::FORMAT_EAST_ASIAN => '-asian', Font::FORMAT_COMPLEX_SCRIPT => '-complex'];
-        $families = [$format => $families[$format] ?? ''] + $families;
+        $families = $otherFamilies ? [$format => $families[$format] ?? ''] + $families : [$families[$format] ?? ''];
         foreach ($families as $suffix) {
             $tag = $nodeTextProperties->getAttribute('style:rfc-language-tag' . $suffix);
             if ('' !== $tag) {
@@ -2248,6 +2249,17 @@ class ODPresentation implements ReaderInterface
 
     protected function loadStylesFile(): void
     {
+        // the language LibreOffice keeps for a presentation, the Latin one of the default style,
+        // which dc:language, read after, overrides; a value that is no language tag is left out
+        $node = $this->oXMLReader->getElement('/office:document-styles/office:styles/style:default-style[@style:family="graphic"]/style:text-properties');
+        $language = $node instanceof DOMElement ? $this->loadLanguage($node, Font::FORMAT_LATIN, false) : null;
+
+        try {
+            if (null !== $language) {
+                $this->oPhpPresentation->getDocumentProperties()->setLanguage($language);
+            }
+        } catch (InvalidParameterException $e) {
+        }
         foreach ($this->oXMLReader->getElements('/office:document-styles/office:styles/*') as $oElement) {
             if ($oElement instanceof DOMElement && 'draw:fill-image' == $oElement->nodeName) {
                 $this->arrayCommonStyles[$oElement->getAttribute('draw:name')] = [

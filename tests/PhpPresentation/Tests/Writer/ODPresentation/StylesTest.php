@@ -283,6 +283,26 @@ class StylesTest extends PhpPresentationTestCase
         }
     }
 
+    public function testDocumentLanguageInTheDefaultStyle(): void
+    {
+        $element = '/office:document-styles/office:styles/style:default-style[@style:family=\'graphic\']/style:text-properties';
+
+        $this->oPresentation->getDocumentProperties()->setLanguage('uk-UA');
+        $this->assertZipXmlAttributeEquals('styles.xml', $element, 'fo:language', 'uk');
+        $this->assertZipXmlAttributeEquals('styles.xml', $element, 'fo:country', 'UA');
+        $this->assertZipXmlAttributeNotExists('styles.xml', $element, 'style:language-asian');
+        $this->assertZipXmlAttributeNotExists('styles.xml', $element, 'style:language-complex');
+        $this->assertZipXmlAttributeNotExists('styles.xml', $element, 'style:rfc-language-tag');
+        $this->assertIsSchemaOpenDocumentValid('1.2');
+
+        $this->oPresentation->getDocumentProperties()->setLanguage('sr-Latn-RS');
+        $this->resetPresentationFile();
+        $this->assertZipXmlAttributeEquals('styles.xml', $element, 'fo:language', 'sr');
+        $this->assertZipXmlAttributeEquals('styles.xml', $element, 'fo:script', 'Latn');
+        $this->assertZipXmlAttributeEquals('styles.xml', $element, 'style:rfc-language-tag', 'sr-Latn-RS');
+        $this->assertIsSchemaOpenDocumentValid('1.2');
+    }
+
     /**
      * The `style:style` of the master page, addressed by the name its `style:master-page` carries.
      *
