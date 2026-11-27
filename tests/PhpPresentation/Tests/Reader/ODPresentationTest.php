@@ -1231,6 +1231,29 @@ class ODPresentationTest extends TestCase
     }
 
     /**
+     * LibreOffice keeps the language of a presentation in the default style; without dc:language
+     * it is read from there.
+     */
+    public function testDocumentLanguageFromTheDefaultStyle(): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oPhpPresentation->getDocumentProperties()->setLanguage('uk-UA');
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        (new ODPresentationWriter($oPhpPresentation))->save($file);
+        $zip = new ZipArchive();
+        $zip->open($file);
+        $meta = (string) $zip->getFromName('meta.xml');
+        $zip->addFromString('meta.xml', (string) preg_replace('#<dc:language>[^<]*</dc:language>#', '', $meta));
+        $zip->close();
+        $oPhpPresentationRead = (new ODPresentation())->load($file);
+        unlink($file);
+
+        self::assertStringContainsString('<dc:language>', $meta);
+        self::assertEquals('uk-UA', $oPhpPresentationRead->getDocumentProperties()->getLanguage());
+    }
+
+    /**
      * @return array<string, array{null|string, string, string}>
      */
     public static function dataProviderRunLanguage(): array

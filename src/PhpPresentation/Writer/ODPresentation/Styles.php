@@ -121,6 +121,17 @@ class Styles extends AbstractDecoratorWriter
 
         // office:styles
         $objWriter->startElement('office:styles');
+        // LibreOffice takes the language of a presentation from the default style, not from
+        // dc:language, so the document language goes here too, for each of the three families
+        $language = $this->getPresentation()->getDocumentProperties()->getLanguage();
+        $objWriter->startElement('style:default-style');
+        $objWriter->writeAttribute('style:family', 'graphic');
+        $objWriter->startElement('style:text-properties');
+        $this->writeLanguage($objWriter, $language, '');
+        $this->writeLanguage($objWriter, $language, '-asian');
+        $this->writeLanguage($objWriter, $language, '-complex');
+        $objWriter->endElement();
+        $objWriter->endElement();
         // The image a master page is filled with, which the style below names
         $oMasterBackground = $this->getMasterBackground();
         if ($oMasterBackground instanceof Image) {

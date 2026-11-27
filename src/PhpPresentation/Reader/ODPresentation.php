@@ -431,12 +431,12 @@ class ODPresentation implements ReaderInterface
         $this->oZip->open($pFilename);
 
         $this->oXMLReader = new XMLReader();
-        if (false !== $this->oXMLReader->getDomFromZip($pFilename, 'meta.xml')) {
-            $this->loadDocumentProperties();
-        }
-        $this->oXMLReader = new XMLReader();
         if (false !== $this->oXMLReader->getDomFromZip($pFilename, 'styles.xml')) {
             $this->loadStylesFile();
+        }
+        $this->oXMLReader = new XMLReader();
+        if (false !== $this->oXMLReader->getDomFromZip($pFilename, 'meta.xml')) {
+            $this->loadDocumentProperties();
         }
         $this->oXMLReader = new XMLReader();
         if (false !== $this->oXMLReader->getDomFromZip($pFilename, 'content.xml')) {
@@ -2248,6 +2248,12 @@ class ODPresentation implements ReaderInterface
 
     protected function loadStylesFile(): void
     {
+        // the language LibreOffice keeps for a presentation, which dc:language, read after, overrides
+        $node = $this->oXMLReader->getElement('/office:document-styles/office:styles/style:default-style[@style:family="graphic"]/style:text-properties');
+        $language = $node instanceof DOMElement ? $this->loadLanguage($node, Font::FORMAT_LATIN) : null;
+        if (null !== $language) {
+            $this->oPhpPresentation->getDocumentProperties()->setLanguage($language);
+        }
         foreach ($this->oXMLReader->getElements('/office:document-styles/office:styles/*') as $oElement) {
             if ($oElement instanceof DOMElement && 'draw:fill-image' == $oElement->nodeName) {
                 $this->arrayCommonStyles[$oElement->getAttribute('draw:name')] = [
