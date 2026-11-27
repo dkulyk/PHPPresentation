@@ -75,6 +75,13 @@ class ObjectsChart extends AbstractDecoratorWriter
      */
     protected $rangeCol;
 
+    /**
+     * The language of every text of the chart being written.
+     *
+     * @var string
+     */
+    protected $language = 'en-US';
+
     public function render(): ZipInterface
     {
         foreach ($this->getArrayChart() as $keyChart => $shapeChart) {
@@ -91,6 +98,8 @@ class ObjectsChart extends AbstractDecoratorWriter
     protected function writeContentPart(Chart $chart): string
     {
         $this->xmlContent = new XMLWriter(XMLWriter::STORAGE_MEMORY);
+        // a chart that names no language of its own is in the one of the document
+        $this->language = $chart->getLanguage() ?? $this->getPresentation()->getDocumentProperties()->getLanguage();
 
         $chartType = $chart->getPlotArea()->getType();
 
@@ -326,6 +335,8 @@ class ObjectsChart extends AbstractDecoratorWriter
         $this->xmlContent->writeAttribute('fo:font-size', $font->getSize() . 'pt');
         $this->xmlContent->writeAttribute('fo:font-style', $font->isItalic() ? 'italic' : 'normal');
         $this->xmlContent->writeAttributeIf($font->isBold(), 'fo:font-weight', 'bold');
+        // a chart is a document of its own, which the language of the presentation does not reach
+        $this->writeLanguage($this->xmlContent, $this->language, '');
         $this->writeFontStates($this->xmlContent, $font);
         $this->xmlContent->endElement();
     }

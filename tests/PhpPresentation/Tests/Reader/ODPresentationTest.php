@@ -2632,6 +2632,79 @@ class ODPresentationTest extends TestCase
         self::assertSame(['Jan' => '1.5', 'Feb' => '2.5'], $series[1]->getValues());
     }
 
+    /**
+     * @return array<string, array{string, null|string}>
+     */
+    public static function dataProviderChartLanguage(): array
+    {
+        return [
+            'the language of the document' => ['uk-UA', null],
+            'a language of its own' => ['uk-UA', 'de-DE'],
+            'the default language of the document' => ['en-US', null],
+            'a language of its own in a document left in the default' => ['en-US', 'uk-UA'],
+            'the language of a document spelled in lower case' => ['de-de', null],
+            'a language of its own with a script' => ['uk-UA', 'sr-Latn-RS'],
+            'languages with no country' => ['uk', 'de'],
+        ];
+    }
+
+    /**
+     * @dataProvider dataProviderChartLanguage
+     */
+    #[DataProvider('dataProviderChartLanguage')]
+    public function testChartLanguageSurvivesTheRoundTrip(string $documentLanguage, ?string $chartLanguage): void
+    {
+        $oPhpPresentation = new PhpPresentation();
+        $oPhpPresentation->getDocumentProperties()->setLanguage($documentLanguage);
+        $chartType = new Chart\Type\Bar();
+        $chartType->addSeries(new Chart\Series('Sales', ['Jan' => '5']));
+        $oChart = $oPhpPresentation->getActiveSlide()->createChartShape();
+        $oChart->getPlotArea()->setType($chartType);
+        $oChart->setLanguage($chartLanguage);
+
+        $oChartRead = $this->roundTripChart($oPhpPresentation)->getActiveSlide()->getShapeCollection()[0];
+        self::assertInstanceOf(Chart::class, $oChartRead);
+        self::assertSame($chartLanguage, $oChartRead->getLanguage());
+    }
+
+    public function testChartLanguageWrittenByLibreOffice(): void
+    {
+        // LibreOffice says the language on the text styles of the titles, and on no chart style
+        $oPhpPresentation = new PhpPresentation();
+        $chartType = new Chart\Type\Bar();
+        $chartType->addSeries(new Chart\Series('Sales', ['Jan' => '5']));
+        $oPhpPresentation->getActiveSlide()->createChartShape()->getPlotArea()->setType($chartType);
+
+        $oPhpPresentationRead = $this->roundTripChart($oPhpPresentation, function (string $content): string {
+            $content = (string) preg_replace('# fo:(language|country)="[^"]*"#', '', $content);
+
+            return str_replace('<office:automatic-styles>', '<office:automatic-styles><style:style style:name="T1" style:family="text"><style:text-properties fo:language="de" fo:country="DE"/></style:style>', $content);
+        });
+
+        $oChartRead = $oPhpPresentationRead->getActiveSlide()->getShapeCollection()[0];
+        self::assertInstanceOf(Chart::class, $oChartRead);
+        self::assertSame('de-DE', $oChartRead->getLanguage());
+    }
+
+    public function testChartLanguageOfAComplexScriptWrittenByLibreOffice(): void
+    {
+        // LibreOffice says an Arabic or a Hebrew chart in the complex family only
+        $oPhpPresentation = new PhpPresentation();
+        $chartType = new Chart\Type\Bar();
+        $chartType->addSeries(new Chart\Series('Sales', ['Jan' => '5']));
+        $oPhpPresentation->getActiveSlide()->createChartShape()->getPlotArea()->setType($chartType);
+
+        $oPhpPresentationRead = $this->roundTripChart($oPhpPresentation, function (string $content): string {
+            $content = (string) preg_replace('# fo:(language|country)="[^"]*"#', '', $content);
+
+            return str_replace('<office:automatic-styles>', '<office:automatic-styles><style:style style:name="T1" style:family="text"><style:text-properties style:language-complex="ar" style:country-complex="SA"/></style:style>', $content);
+        });
+
+        $oChartRead = $oPhpPresentationRead->getActiveSlide()->getShapeCollection()[0];
+        self::assertInstanceOf(Chart::class, $oChartRead);
+        self::assertSame('ar-SA', $oChartRead->getLanguage());
+    }
+
     public function testObjectThatIsNotAChartIsNotReadAsOne(): void
     {
         $oPhpPresentation = new PhpPresentation();

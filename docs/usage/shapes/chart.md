@@ -38,8 +38,8 @@ echo $chart->getDisplayBlankAs();
 The text of a chart -- its title, its legend, its data labels and its axes -- is in the language
 of the document, set with `DocumentProperties::setLanguage()`, unless the chart is given one of its
 own with `setLanguage()`. It takes a language tag such as `de-DE`, and `null` gives the chart back
-to the language of the document. The PowerPoint2007 Writer writes it and the PowerPoint2007 Reader
-reads it back.
+to the language of the document. The PowerPoint2007 and ODPresentation Writers write it, and their
+Readers read it back.
 
 ``` php
 <?php
