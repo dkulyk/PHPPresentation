@@ -180,3 +180,18 @@ $row = $tableShape->createRow();
 $cellA1 = $row->nextCell();
 $cellA1->setWidth(100);
 ```
+
+### Merge cells
+A cell spans the columns to its right with `setColSpan`, and the rows below it with `setRowSpan`.
+The cells it covers stay in the row: a cell spanning five columns covers the next four, so the
+next cell after it is `getCell(5)`, not the one `nextCell` returns. A cell that a span covers is
+written as covered, and a span set on it is ignored.
+
+``` php
+<?php
+
+$tableShape = $slide->createTableShape(8);
+$row = $tableShape->createRow();
+$row->getCell(0)->setColSpan(5);
+$row->getCell(5)->setColSpan(3);
+```
